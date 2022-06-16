@@ -21,7 +21,7 @@ interface IAuctionNative is ISignableStructsAuction {
     /**
      * @notice Processes an arriving bid, and either starts a new Auction process,
      *   or updates an existing one.
-     * @dev Executed by the bidder, who relays the MetaTX with the operator's signature.
+     * @dev Executed by the bidder, who relays the operator's signature.
      *  The bidder must provide, at least, the minimal required funds via msg.value,
      *  where the minimal amount takes into account any possibly available local funds,
      *  and the case where the same bidder raises his/her previous max bid,

@@ -37,18 +37,22 @@ contract BuyNowERC20 is IBuyNowERC20, BuyNowBase {
         _processBuyNow(buyNowInp, operator);
     }
 
-
     /// @inheritdoc IBuyNowERC20
-    function relayedBuyNow(BuyNowInput calldata buyNowInp, bytes calldata buyerSignature) external {
+    function relayedBuyNow(
+        BuyNowInput calldata buyNowInp,
+        bytes calldata buyerSignature,
+        bytes calldata operatorSignature
+    ) external {
+        address operator = universeOperator(buyNowInp.universeId);
         require(
-            msg.sender == universeOperator(buyNowInp.universeId),
-            "operator not authorized for this universeId"
+            IEIP712VerifierBuyNow(_eip712).verifyBuyNow(buyNowInp, operatorSignature, operator),
+            "incorrect operator signature"
         );
         require(
             IEIP712VerifierBuyNow(_eip712).verifyBuyNow(buyNowInp, buyerSignature, buyNowInp.buyer),
             "incorrect buyer signature"
         );
-        _processBuyNow(buyNowInp, msg.sender);
+        _processBuyNow(buyNowInp, operator);
     }
 
     // PRIVATE & INTERNAL FUNCTIONS
