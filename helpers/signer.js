@@ -41,7 +41,7 @@ function getERC712DomainInstance(chainId, contractAddress, isERC20) {
   };
 }
 
-function prepareDataToSignPayment({
+function prepareDataToSignBuyNow({
   msg, chainId, contractAddress, isERC20,
 }) {
   return {
@@ -90,7 +90,7 @@ function prepareDataToSignAssetTransfer({
 }
 
 module.exports = {
-  prepareDataToSignPayment,
+  prepareDataToSignBuyNow,
   prepareDataToSignBid,
   prepareDataToSignAssetTransfer,
 };

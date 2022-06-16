@@ -63,7 +63,7 @@ For ERC20 flows, the user must first allow this payment contract to receive fund
 
 Once the allowance step is cleared, there are two different flavours of the `bid/buyNow` methods to get to the same place: direct and relayed:
 - in the `bid/buyNow` methods, the buyer is the `msg.sender` (the buyer therefore signs the TX), and the Operator's EIP712-signature of the `bid/buyNow` parameters is provided as input to the call;
-- in the `relayedBid/relayedBuyNow` methods, the Operator is the `msg.sender` (the Operator therefore signs the TX), and the buyer's EIP712-signature of the `bid/buyNow` parameters is provided as input to the call.
+- in the `relayedBid/relayedBuyNow` methods, anyone can be `msg.sender`, but both the operator and the buyer's EIP712-signatures of the `bid/buyNow` parameters are provided as input to the call.
 
 ## UML Diagram
 

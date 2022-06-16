@@ -3,7 +3,7 @@
 const { assert } = require('chai');
 const truffleAssert = require('truffle-assertions');
 const ethSigUtil = require('eth-sig-util');
-const { prepareDataToSignPayment, prepareDataToSignAssetTransfer } = require('../helpers/signer');
+const { prepareDataToSignBuyNow, prepareDataToSignAssetTransfer } = require('../helpers/signer');
 const {
   fromHexString, toBN, provideFunds, registerAccountInLocalTestnet, getGasFee, assertBalances,
 } = require('../helpers/utils');
@@ -94,7 +94,7 @@ contract('BuyNowNative1', (accounts) => {
     // Operator signs purchase
     const signature = ethSigUtil.signTypedMessage(
       fromHexString(operatorPrivKey.slice(2)),
-      prepareDataToSignPayment({
+      prepareDataToSignBuyNow({
         msg: _paymentData,
         chainId: await web3.eth.getChainId(),
         contractAddress: eip712.address,
