@@ -6,7 +6,7 @@ require('chai')
   .should();
 const Wallet = require('ethereumjs-wallet').default;
 const ethSigUtil = require('eth-sig-util');
-const { prepareDataToSignPayment, prepareDataToSignAssetTransfer } = require('../helpers/signer');
+const { prepareDataToSignBuyNow, prepareDataToSignAssetTransfer } = require('../helpers/signer');
 const { fromHexString } = require('../helpers/utils');
 
 const EIP712Verifier = artifacts.require('EIP712VerifierBuyNow');
@@ -148,7 +148,7 @@ contract('EIP712VerifierBuyNow', (accounts) => {
 
     const signature = ethSigUtil.signTypedMessage(
       fromHexString(hardcodedPrivKey),
-      prepareDataToSignPayment({
+      prepareDataToSignBuyNow({
         msg: hardcodedPaymentData,
         chainId: hardcodedChainId,
         contractAddress: hardcodedContractAddr,
@@ -174,7 +174,7 @@ contract('EIP712VerifierBuyNow', (accounts) => {
 
     const signature = ethSigUtil.signTypedMessage(
       fromHexString(hardcodedPrivKey),
-      prepareDataToSignPayment({
+      prepareDataToSignBuyNow({
         msg: hardcodedPaymentData,
         chainId: hardcodedChainId,
         contractAddress: hardcodedContractAddr,
@@ -200,7 +200,7 @@ contract('EIP712VerifierBuyNow', (accounts) => {
 
     const signature = ethSigUtil.signTypedMessage(
       fromHexString(hardcodedPrivKey),
-      prepareDataToSignPayment({
+      prepareDataToSignBuyNow({
         msg: hardcodedPaymentData,
         chainId: hardcodedChainId,
         contractAddress: hardcodedContractAddr,
@@ -226,7 +226,7 @@ contract('EIP712VerifierBuyNow', (accounts) => {
 
     const signature = ethSigUtil.signTypedMessage(
       fromHexString(hardcodedPrivKey),
-      prepareDataToSignPayment({
+      prepareDataToSignBuyNow({
         msg: hardcodedPaymentData,
         chainId: hardcodedChainId,
         contractAddress: hardcodedContractAddr,
@@ -238,7 +238,7 @@ contract('EIP712VerifierBuyNow', (accounts) => {
   it('payment signature is correctly verified', async () => {
     const signature = ethSigUtil.signTypedMessage(
       wallet.getPrivateKey(),
-      prepareDataToSignPayment({
+      prepareDataToSignBuyNow({
         msg: paymentData,
         chainId: await web3.eth.getChainId(),
         contractAddress: verifier.address,
@@ -250,7 +250,7 @@ contract('EIP712VerifierBuyNow', (accounts) => {
   it('payment signature is rejected if incorrect', async () => {
     const signature = ethSigUtil.signTypedMessage(
       wallet.getPrivateKey(),
-      prepareDataToSignPayment({
+      prepareDataToSignBuyNow({
         msg: paymentData,
         chainId: await web3.eth.getChainId(),
         contractAddress: verifier.address,
@@ -267,7 +267,7 @@ contract('EIP712VerifierBuyNow', (accounts) => {
   it('payment signature is only valid for one contract address', async () => {
     const signature = ethSigUtil.signTypedMessage(
       wallet.getPrivateKey(),
-      prepareDataToSignPayment({
+      prepareDataToSignBuyNow({
         msg: paymentData,
         chainId: await web3.eth.getChainId(),
         contractAddress: verifier.address,

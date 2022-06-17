@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 /* eslint-disable no-await-in-loop */
 /* eslint-disable no-undef */
 
@@ -89,21 +90,17 @@ contract('AuctionERC20_3', (accounts) => {
     await timeTravel.revertToSnapShot(snapshot.result);
   });
 
-  async function finalize(_paymentId, _success, _operatorPvk) {
-    const data = { paymentId: _paymentId, wasSuccessful: _success };
-    const signature = ethSigUtil.signTypedMessage(
-      fromHexString(_operatorPvk.slice(2)),
-      prepareDataToSignAssetTransfer({
-        msg: data,
+  async function signEIP712(_privKey, _prepareFunc, _data, _isERC20) {
+    const sig = await ethSigUtil.signTypedMessage(
+      fromHexString(_privKey.slice(2)),
+      _prepareFunc({
+        msg: _data,
         chainId: await web3.eth.getChainId(),
         contractAddress: eip712.address,
-        isERC20: true,
+        isERC20: _isERC20,
       }),
     );
-    await payments.finalize(
-      data,
-      signature,
-    );
+    return sig;
   }
 
   // Executes a relayedBid. Reused by many tests.
@@ -117,19 +114,11 @@ contract('AuctionERC20_3', (accounts) => {
     await erc20.approve(payments.address, _bidData.bidAmount, { from: _bidData.bidder }).should.be.fulfilled;
 
     // Buyer signs purchase
-    const pk = _bidderPK ? _bidderPK.slice(2) : buyerPrivKey.slice(2);
-    const signature = ethSigUtil.signTypedMessage(
-      fromHexString(pk),
-      prepareDataToSignBid({
-        msg: _bidData,
-        chainId: await web3.eth.getChainId(),
-        contractAddress: eip712.address,
-        isERC20: true,
-      }),
-    );
+    const bidderPK = _bidderPK || buyerPrivKey;
+    const sigBidder = await signEIP712(bidderPK, prepareDataToSignBid, _bidData, true);
+    const sigOperator = await signEIP712(operatorPrivKey, prepareDataToSignBid, _bidData, true);
     // Pay
-    await payments.relayedBid(_bidData, signature, { from: operator });
-    return signature;
+    await payments.relayedBid(_bidData, sigBidder, sigOperator, { from: operator });
   }
 
   // Executes a Bid directly by buyer. Reused by many tests.
@@ -145,15 +134,7 @@ contract('AuctionERC20_3', (accounts) => {
     await erc20.approve(payments.address, _bidData.bidAmount, { from: _bidData.bidder }).should.be.fulfilled;
 
     // Operator signs purchase
-    const signature = ethSigUtil.signTypedMessage(
-      fromHexString(operatorPrivKey.slice(2)),
-      prepareDataToSignBid({
-        msg: _bidData,
-        chainId: await web3.eth.getChainId(),
-        contractAddress: eip712.address,
-        isERC20: true,
-      }),
-    );
+    const signature = await signEIP712(operatorPrivKey, prepareDataToSignBid, _bidData, true);
 
     // Pay
     const receipt = await payments.bid(_bidData, signature, { from: _bidData.bidder });
@@ -190,17 +171,17 @@ contract('AuctionERC20_3', (accounts) => {
     );
   });
 
-  it('relayedBid: only the actual operator can relay bid signed by bidder', async () => {
+  it('relayedBid: the actual operator must sign relay bid signed by bidder', async () => {
     assert.notEqual(operator, carol);
     await payments.setUniverseOperator(bidData.universeId, carol);
     assert.equal(await payments.universeOperator(bidData.universeId), carol);
     await truffleAssert.reverts(
       relayedBid(bidData, initialBuyerERC20, initialBuyerETH),
-      'operator not authorized for this universeId.',
+      'incorrect operator signature',
     );
   });
 
-  it('only the bidder can sign the relayed bid data', async () => {
+  it('bidder must sign the relayed bid data', async () => {
     await erc20.transfer(bidData.bidder, initialBuyerERC20, { from: deployer });
     await provideFunds(deployer, bidData.bidder, initialBuyerETH);
 
@@ -208,18 +189,11 @@ contract('AuctionERC20_3', (accounts) => {
 
     // Buyer signs purchase
     const randomPK = '0x9A878F7892FBBFA30C8AED1DF317C19B853685E707C2CF0EE1927DC516060A54';
-    const signature = ethSigUtil.signTypedMessage(
-      fromHexString(randomPK.slice(2)),
-      prepareDataToSignBid({
-        msg: bidData,
-        chainId: await web3.eth.getChainId(),
-        contractAddress: eip712.address,
-        isERC20: true,
-      }),
-    );
+    const signatureOperator = await signEIP712(operatorPrivKey, prepareDataToSignBid, bidData, true);
+    const signatureRnd = await signEIP712(randomPK, prepareDataToSignBid, bidData, true);
     // Pay
     await truffleAssert.reverts(
-      payments.relayedBid(bidData, signature, { from: operator }),
+      payments.relayedBid(bidData, signatureRnd, signatureOperator, { from: bob }),
       'incorrect bidder signature.',
     );
   });

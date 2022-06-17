@@ -59,11 +59,19 @@ contract AuctionERC20 is IAuctionERC20, AuctionBase, BuyNowERC20 {
     }
 
     /// @inheritdoc IAuctionERC20
-    function relayedBid(BidInput calldata bidInput, bytes calldata bidderSignature) external {
+    function relayedBid(
+        BidInput calldata bidInput,
+        bytes calldata bidderSignature,
+        bytes calldata operatorSignature
+    ) external {
         address operator = universeOperator(bidInput.universeId);
         require(
-            msg.sender == operator,
-            "operator not authorized for this universeId"
+            IEIP712VerifierAuction(_eip712).verifyBid(
+                bidInput,
+                operatorSignature,
+                operator
+            ),
+            "incorrect operator signature"
         );
         require(
             IEIP712VerifierAuction(_eip712).verifyBid(

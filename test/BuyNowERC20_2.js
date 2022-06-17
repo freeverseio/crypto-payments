@@ -4,7 +4,7 @@
 const { assert } = require('chai');
 const truffleAssert = require('truffle-assertions');
 const ethSigUtil = require('eth-sig-util');
-const { prepareDataToSignPayment, prepareDataToSignAssetTransfer } = require('../helpers/signer');
+const { prepareDataToSignBuyNow, prepareDataToSignAssetTransfer } = require('../helpers/signer');
 const {
   fromHexString, toBN, provideFunds, registerAccountInLocalTestnet, getGasFee, assertBalances,
 } = require('../helpers/utils');
@@ -81,17 +81,22 @@ contract('BuyNowERC20_2', (accounts) => {
     await timeTravel.revertToSnapShot(snapshot.result);
   });
 
-  async function finalize(_paymentId, _success, _operatorPvk) {
-    const data = { paymentId: _paymentId, wasSuccessful: _success };
-    const signature = ethSigUtil.signTypedMessage(
-      fromHexString(_operatorPvk.slice(2)),
-      prepareDataToSignAssetTransfer({
-        msg: data,
+  async function signEIP712(_privKey, _prepareFunc, _data, _isERC20) {
+    const sig = await ethSigUtil.signTypedMessage(
+      fromHexString(_privKey.slice(2)),
+      _prepareFunc({
+        msg: _data,
         chainId: await web3.eth.getChainId(),
         contractAddress: eip712.address,
-        isERC20: true,
+        isERC20: _isERC20,
       }),
     );
+    return sig;
+  }
+
+  async function finalize(_paymentId, _success, _operatorPvk) {
+    const data = { paymentId: _paymentId, wasSuccessful: _success };
+    const signature = await signEIP712(_operatorPvk, prepareDataToSignAssetTransfer, data, true);
     await payments.finalize(
       data,
       signature,
@@ -108,19 +113,11 @@ contract('BuyNowERC20_2', (accounts) => {
     // Buyer approves purchase allowance
     await erc20.approve(payments.address, _paymentData.amount, { from: _paymentData.buyer }).should.be.fulfilled;
 
-    // Buyer signs purchase
-    const signature = ethSigUtil.signTypedMessage(
-      fromHexString(buyerPrivKey.slice(2)),
-      prepareDataToSignPayment({
-        msg: _paymentData,
-        chainId: await web3.eth.getChainId(),
-        contractAddress: eip712.address,
-        isERC20: true,
-      }),
-    );
+    const sigBuyer = await signEIP712(buyerPrivKey, prepareDataToSignBuyNow, _paymentData, true);
+    const sigOperator = await signEIP712(operatorPrivKey, prepareDataToSignBuyNow, _paymentData, true);
+
     // Pay
-    await payments.relayedBuyNow(_paymentData, signature, { from: _operator });
-    return signature;
+    await payments.relayedBuyNow(_paymentData, sigBuyer, sigOperator, { from: _operator });
   }
 
   // Executes a Payment directly by buyer. Reused by many tests.
@@ -135,15 +132,7 @@ contract('BuyNowERC20_2', (accounts) => {
     await erc20.approve(payments.address, _paymentData.amount, { from: _paymentData.buyer }).should.be.fulfilled;
 
     // Operator signs purchase
-    const signature = ethSigUtil.signTypedMessage(
-      fromHexString(operatorPrivKey.slice(2)),
-      prepareDataToSignPayment({
-        msg: _paymentData,
-        chainId: await web3.eth.getChainId(),
-        contractAddress: eip712.address,
-        isERC20: true,
-      }),
-    );
+    const signature = await signEIP712(operatorPrivKey, prepareDataToSignBuyNow, _paymentData, true);
 
     // Pay
     await payments.buyNow(_paymentData, signature, { from: _paymentData.buyer });
@@ -367,7 +356,7 @@ contract('BuyNowERC20_2', (accounts) => {
   });
 
   it('From PAID: no further action is accepted', async () => {
-    const signature = await relayedBuyNow(paymentData, initialBuyerERC20, initialBuyerETH, operator);
+    await relayedBuyNow(paymentData, initialBuyerERC20, initialBuyerETH, operator);
     await finalize(paymentData.paymentId, true, operatorPrivKey);
     // try assetTransferSuccess
     await truffleAssert.reverts(
@@ -383,7 +372,7 @@ contract('BuyNowERC20_2', (accounts) => {
     await erc20.approve(payments.address, paymentData.amount, { from: paymentData.buyer }).should.be.fulfilled;
 
     await truffleAssert.reverts(
-      payments.relayedBuyNow(paymentData, signature, { from: operator }),
+      relayedBuyNow(paymentData, 0, 0, operator),
       'payment in incorrect current state',
     );
   });
@@ -710,25 +699,18 @@ contract('BuyNowERC20_2', (accounts) => {
 
     await erc20.approve(payments.address, Number(paymentData.amount), { from: buyerAccount.address }).should.be.fulfilled;
 
-    const signature = ethSigUtil.signTypedMessage(
-      fromHexString(buyerPrivKey.slice(2)),
-      prepareDataToSignPayment({
-        msg: paymentData,
-        chainId: await web3.eth.getChainId(),
-        contractAddress: eip712.address,
-        isERC20: true,
-      }),
-    );
+    const sigBuyer = await signEIP712(buyerPrivKey, prepareDataToSignBuyNow, paymentData, true);
+    const sigOperator = await signEIP712(operatorPrivKey, prepareDataToSignBuyNow, paymentData, true);
 
     // fails unless registration is not required:
     await payments.setIsSellerRegistrationRequired(true, { from: deployer }).should.be.fulfilled;
     assert.equal(await payments.isRegisteredSeller(paymentData.seller), false);
     await truffleAssert.reverts(
-      payments.relayedBuyNow(paymentData, signature, { from: operator }),
+      payments.relayedBuyNow(paymentData, sigBuyer, sigOperator, { from: operator }),
       'seller not registered',
     );
     await payments.setIsSellerRegistrationRequired(false, { from: deployer }).should.be.fulfilled;
-    await payments.relayedBuyNow(paymentData, signature, { from: operator }).should.be.fulfilled;
+    await payments.relayedBuyNow(paymentData, sigBuyer, sigOperator, { from: operator }).should.be.fulfilled;
   });
 
   it('DirectPay: if isSellerRegistrationRequired == false, no need to register', async () => {
@@ -737,15 +719,7 @@ contract('BuyNowERC20_2', (accounts) => {
 
     await erc20.approve(payments.address, Number(paymentData.amount), { from: buyerAccount.address }).should.be.fulfilled;
 
-    const signature = ethSigUtil.signTypedMessage(
-      fromHexString(operatorPrivKey.slice(2)),
-      prepareDataToSignPayment({
-        msg: paymentData,
-        chainId: await web3.eth.getChainId(),
-        contractAddress: eip712.address,
-        isERC20: true,
-      }),
-    );
+    const signature = await signEIP712(operatorPrivKey, prepareDataToSignBuyNow, paymentData, true);
 
     // fails unless registration is not required:
     await payments.setIsSellerRegistrationRequired(true, { from: deployer }).should.be.fulfilled;
@@ -771,26 +745,19 @@ contract('BuyNowERC20_2', (accounts) => {
     // And also funding Carol with ETH so that she can approve
     await provideFunds(deployer, buyerAccount.address, initialBuyerETH);
 
-    const signature = ethSigUtil.signTypedMessage(
-      fromHexString(buyerPrivKey.slice(2)),
-      prepareDataToSignPayment({
-        msg: paymentData,
-        chainId: await web3.eth.getChainId(),
-        contractAddress: eip712.address,
-        isERC20: true,
-      }),
-    );
+    const sigBuyer = await signEIP712(buyerPrivKey, prepareDataToSignBuyNow, paymentData, true);
+    const sigOperator = await signEIP712(operatorPrivKey, prepareDataToSignBuyNow, paymentData, true);
 
     // should fail unless seller is registered
     await truffleAssert.reverts(
-      payments.relayedBuyNow(paymentData, signature, { from: operator }),
+      payments.relayedBuyNow(paymentData, sigBuyer, sigOperator, { from: operator }),
       'seller not registered',
     );
     await payments.registerAsSeller({ from: paymentData.seller }).should.be.fulfilled;
 
     // should fail unless buyer has approved an allowance to the payments contract
     await truffleAssert.reverts(
-      payments.relayedBuyNow(paymentData, signature, { from: operator }),
+      payments.relayedBuyNow(paymentData, sigBuyer, sigOperator, { from: operator }),
       'insufficient allowance',
     );
 
@@ -799,7 +766,7 @@ contract('BuyNowERC20_2', (accounts) => {
     await erc20.approve(payments.address, Number(paymentData.amount) - 1, { from: buyerAccount.address }).should.be.fulfilled;
 
     await truffleAssert.reverts(
-      payments.relayedBuyNow(paymentData, signature, { from: operator }),
+      payments.relayedBuyNow(paymentData, sigBuyer, sigOperator, { from: operator }),
       'insufficient allowance',
     );
 
@@ -820,18 +787,18 @@ contract('BuyNowERC20_2', (accounts) => {
 
     // fails unless correctly signed by buyer
     await truffleAssert.reverts(
-      payments.relayedBuyNow(paymentData, dummySignature, { from: operator }),
+      payments.relayedBuyNow(paymentData, dummySignature, sigOperator, { from: operator }),
       'incorrect buyer signature',
     );
 
     // fails unless operator is authorized
     await truffleAssert.reverts(
-      payments.relayedBuyNow(paymentData, signature, { from: buyerAccount.address }),
-      'operator not authorized for this universeId',
+      payments.relayedBuyNow(paymentData, sigBuyer, dummySignature, { from: buyerAccount.address }),
+      'incorrect operator signature',
     );
 
     // it finally is accepted
-    await payments.relayedBuyNow(paymentData, signature, { from: operator }).should.be.fulfilled;
+    await payments.relayedBuyNow(paymentData, sigBuyer, sigOperator, { from: operator }).should.be.fulfilled;
   });
 
   it('Direct pay executed by buyer requirements are correctly checked', async () => {
@@ -847,15 +814,7 @@ contract('BuyNowERC20_2', (accounts) => {
     // And also funding Carol with ETH so that she can approve
     await provideFunds(deployer, buyerAccount.address, initialBuyerETH);
 
-    const signature = ethSigUtil.signTypedMessage(
-      fromHexString(operatorPrivKey.slice(2)),
-      prepareDataToSignPayment({
-        msg: paymentData,
-        chainId: await web3.eth.getChainId(),
-        contractAddress: eip712.address,
-        isERC20: true,
-      }),
-    );
+    const signature = await signEIP712(operatorPrivKey, prepareDataToSignBuyNow, paymentData, true);
 
     // should fail unless the buyer is the sender of the TX
     await truffleAssert.reverts(

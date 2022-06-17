@@ -10,8 +10,8 @@ import "./base/ISignableStructsAuction.sol";
  * which are defined and documented in the AuctionBase contract.
  * - in the 'bid' method, the buyer is the msg.sender (the buyer therefore signs the TX),
  *   and the operator's EIP712-signature of the BidInput struct is provided as input to the call.
- * - in the 'relayedBid' method, the operator is the msg.sender (the operator therefore signs the TX),
- *   and the buyer's EIP712-signature of the BidInput struct is provided as input to the call.
+ * - in the 'relayedBid' method, anyone can be msg.sender, but both the operator and the buyer
+ *   EIP712-signatures of the BidInput struct are provided as input to the call.
  *
  *  To improve user UX, the default settings are such that when a bidder is outbid by a different user,
  *  he/she is automatically refunded to the external ERC20, as opposite to refunding to this contract's
@@ -35,7 +35,7 @@ interface IAuctionERC20 is ISignableStructsAuction {
     /**
      * @notice Processes an arriving bid, and either starts a new Auction process,
      *   or updates an existing one.
-     * @dev Executed by the bidder, who relays the MetaTX with the operator's signature.
+     * @dev Executed by the bidder, who relays the operator's signature.
      *  This method will transfer only the minimum required amount from the bidder
      *  to this contract, taking into account any exisiting local balance,
      *  and the case where the same bidder raises his/her previous max bid,
@@ -52,7 +52,7 @@ interface IAuctionERC20 is ISignableStructsAuction {
     /**
      * @notice Processes an arriving bid, and either starts a new Auction process,
      *   or updates an existing one.
-     * @dev Executed by the Operator, who relays the MetaTX with the bidders's signature.
+     * @dev Executed by the anyone, who must relay both the operator and the bidder signatures.
      *  This method will transfer only the minimum required amount from the bidder
      *  to this contract, taking into account any exisiting local balance,
      *  and the case where the same bidder raises his/her previous max bid,
@@ -62,9 +62,14 @@ interface IAuctionERC20 is ISignableStructsAuction {
      *  If this is the first bid of an auction, it moves its state to AUCTIONING,
      *  whereas if it arrives on an on-going auction, it remains in AUCTIONING.
      * @param bidInput The struct containing all required bid data
-     * @param bidderSignature The signature of 'bidInput' by the operator
+     * @param bidderSignature The signature of 'bidInput' by the bidder
+     * @param operatorSignature The signature of 'bidInput' by the operator
      */
-    function relayedBid(BidInput calldata bidInput, bytes calldata bidderSignature) external;
+    function relayedBid(
+        BidInput calldata bidInput,
+        bytes calldata bidderSignature,
+        bytes calldata operatorSignature
+    ) external;
 
     /**
      * @notice Sets whether outbids for assets in a universe should
