@@ -216,9 +216,18 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
      * @param buyNowInp The BuyNowInput struct
      * @param operator The address of the operator of this payment.
      */
-    function _processBuyNow(BuyNowInput calldata buyNowInp, address operator)
-        internal
-    {
+    function _processBuyNow(
+        BuyNowInput calldata buyNowInp,
+        address operator,
+        bytes calldata sellerSignature
+    ) internal {
+        require(
+            IEIP712VerifierBuyNow(_eip712).verifySellerSignature(
+                sellerSignature,
+                buyNowInp
+            ),
+            "BuyNowBase::_processBuyNow: incorrect seller signature"
+        );
         assertBuyNowInputsOK(buyNowInp);
         assertSeparateRoles(operator, buyNowInp.buyer, buyNowInp.seller);
         (uint256 newFundsNeeded, uint256 localFunds) = splitFundingSources(
