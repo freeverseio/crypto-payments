@@ -249,8 +249,8 @@ abstract contract AuctionBase is IAuctionBase, BuyNowBase {
                 "AuctionBase::assertBidInputsOK: endsAt cannot be in the past"
             );
             require(
-                bidInput.feeBPS <= 10000,
-                "AuctionBase::assertBidInputsOK: fee cannot be larger than 100 percent"
+                bidInput.feeBPS <= _maxFeeBPS,
+                "AuctionBase::assertBidInputsOK: fee cannot be larger than maxFeeBPS"
             );
             require(
                 bidInput.bidAmount > 0,

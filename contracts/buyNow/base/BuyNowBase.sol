@@ -24,6 +24,11 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
     //  or negative confirmation by the operator
     uint256 internal _paymentWindow;
 
+    //  the max fee (in BPS units) that can be accepted in any payment
+    //  despite operator and buyer having signed a larger amount;
+    //  a value of 10000 BPS would correspond to 100% (no limit at all)
+    uint256 internal _maxFeeBPS;
+
     // whether sellers need to be registered to be able to accept payments
     bool internal _isSellerRegistrationRequired;
 
@@ -48,6 +53,7 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
         _acceptedCurrency = currencyDescriptor;
         _paymentWindow = 30 days;
         _isSellerRegistrationRequired = false;
+        _maxFeeBPS = 3000; // 30%
     }
 
     /**
@@ -74,6 +80,21 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
         );
         _paymentWindow = window;
         emit PaymentWindow(window);
+    }
+
+    /**
+     * @notice Sets the max fee (in BPS units) that can be accepted in any payment
+     *  despite operator and buyer having signed a larger amount;
+     *  a value of 10000 BPS would correspond to 100% (no limit at all)
+     * @param feeBPS The new max fee (in BPS units)
+     */
+    function setMaxFeeBPS(uint256 feeBPS) external onlyOwner {
+        require(
+            (feeBPS <= 10000) && (feeBPS >= 0),
+            "BuyNowBase::setMaxFeeBPS: maxFeeBPS outside limits"
+        );
+        _maxFeeBPS = feeBPS;
+        emit MaxFeeBPS(feeBPS);
     }
 
     /**
@@ -393,6 +414,11 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
     }
 
     /// @inheritdoc IBuyNowBase
+    function maxFeeBPS() external view returns (uint256) {
+        return _maxFeeBPS;
+    }
+
+    /// @inheritdoc IBuyNowBase
     function acceptedCurrency() external view returns (string memory) {
         return _acceptedCurrency;
     }
@@ -404,8 +430,8 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
             "BuyNowBase::assertBuyNowInputsOK: payment amount cannot be zero"
         );
         require(
-            buyNowInp.feeBPS <= 10000,
-            "BuyNowBase::assertBuyNowInputsOK: fee cannot be larger than 100 percent"
+            buyNowInp.feeBPS <= _maxFeeBPS,
+            "BuyNowBase::assertBuyNowInputsOK: fee cannot be larger than maxFeeBPS"
         );
         require(
             paymentState(buyNowInp.paymentId) == State.NotStarted,

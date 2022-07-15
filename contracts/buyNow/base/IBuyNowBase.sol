@@ -74,6 +74,14 @@ interface IBuyNowBase is ISignableStructsBuyNow {
     event PaymentWindow(uint256 window);
 
     /**
+     * @dev Event emitted on change of maximum fee BPS that can be accepted in any payment
+     * @param maxFeeBPS the max fee (in BPS units) that can be accepted in any payment
+     *  despite operator and buyer having signed a larger amount;
+     *  a value of 10000 BPS would correspond to 100% (no limit at all)
+     */
+    event MaxFeeBPS(uint256 maxFeeBPS);
+
+    /**
      * @dev Event emitted when a user executes the registerAsSeller method
      * @param seller The address of the newly registeredAsSeller user.
      */
@@ -330,6 +338,14 @@ interface IBuyNowBase is ISignableStructsBuyNow {
      * @return the payment window in secs
      */
     function paymentWindow() external view returns (uint256);
+
+    /**
+     * @notice Returns the max fee (in BPS units) that can be accepted in any payment
+     *  despite operator and buyer having signed a larger amount;
+     *  a value of 10000 BPS would correspond to 100% (no limit at all)
+     * @return the max fee (in BPS units)
+     */
+    function maxFeeBPS() external view returns (uint256);
 
     /**
      * @notice Returns a descriptor about the currency that this contract accepts
