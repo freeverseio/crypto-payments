@@ -152,6 +152,11 @@ contract('AuctionERC20_1', (accounts) => {
   }
 
   // eslint-disable-next-line no-unused-vars
+  it('can query optional ERC20 name, symbol and decimals on deploy', async () => {
+    assert.equal(await payments.erc20ContractName(), name);
+    assert.equal(await payments.erc20ContractSymbol(), symbol);
+    assert.equal(Number(await payments.erc20ContractDecimals()), 18);
+  });
 
   it('Bid execution results in funds received by Payments contract', async () => {
     await bid(bidData, initialBuyerERC20, initialBuyerETH);

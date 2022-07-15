@@ -191,7 +191,7 @@ contract('BuyNowNative1', (accounts) => {
 
   it('Payments deploys with expected storage', async () => {
     assert.equal(await payments.isSellerRegistrationRequired(), false);
-    assert.equal(await payments.acceptedCurrency(), CURRENCY_DESCRIPTOR);
+    assert.equal(await payments.currencyLongDescriptor(), CURRENCY_DESCRIPTOR);
     assert.equal(await payments.defaultOperator(), accounts[0]);
     assert.equal(await payments.defaultFeesCollector(), accounts[0]);
     assert.equal(await payments.owner(), accounts[0]);

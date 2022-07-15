@@ -141,6 +141,11 @@ contract('BuyNowERC20_1', (accounts) => {
   }
 
   // eslint-disable-next-line no-unused-vars
+  it('can query optional ERC20 name, symbol and decimals on deploy', async () => {
+    assert.equal(await payments.erc20ContractName(), name);
+    assert.equal(await payments.erc20ContractSymbol(), symbol);
+    assert.equal(Number(await payments.erc20ContractDecimals()), 18);
+  });
 
   it('payments start in NOT_STARTED state', async () => {
     assert.equal(await payments.paymentState(paymentData.paymentId), NOT_STARTED);
@@ -242,7 +247,7 @@ contract('BuyNowERC20_1', (accounts) => {
 
   it('Payments deploys with expected storage', async () => {
     assert.equal(await payments.isSellerRegistrationRequired(), false);
-    assert.equal(await payments.acceptedCurrency(), CURRENCY_DESCRIPTOR);
+    assert.equal(await payments.currencyLongDescriptor(), CURRENCY_DESCRIPTOR);
     assert.equal(await payments.defaultOperator(), accounts[0]);
     assert.equal(await payments.defaultFeesCollector(), accounts[0]);
     assert.equal(await payments.owner(), accounts[0]);
