@@ -99,8 +99,8 @@ abstract contract AuctionBase is IAuctionBase, BuyNowBase {
      *  and refunds previous highest bidder (if any).
      *  - If payment is in NOT_STARTED => it moves to AUCTIONING
      *  - If payment is in AUCTIONING => it remains in AUCTIONING
-     * @param bidInput The BidInput struct
      * @param operator The address of the operator of this payment.
+     * @param bidInput The BidInput struct
      */
     function _processBid(address operator, BidInput memory bidInput) internal {
         State state = assertBidInputsOK(bidInput);
