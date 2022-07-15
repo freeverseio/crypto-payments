@@ -402,7 +402,7 @@ contract('BuyNowNative2', (accounts) => {
     );
   });
 
-  it('withdraws can be done on behalf of user (like previous test but withdraw -> withdrawTo)', async () => {
+  it('withdraws can be done on behalf of user (like previous test but withdraw -> relayedWithdraw)', async () => {
     await payments.registerAsSeller({ from: paymentData.seller }).should.be.fulfilled;
 
     // This test will check balances of Buyer, Seller & FeesCollector (= deployer)
@@ -476,7 +476,7 @@ contract('BuyNowNative2', (accounts) => {
     const feeSetOnlyUser = getGasFee(receiptSetOnlyUser);
 
     await truffleAssert.reverts(
-      payments.withdrawTo(paymentData.seller),
+      payments.relayedWithdraw(paymentData.seller),
       'tx sender not authorized to withdraw on recipients behalf',
     );
 
@@ -484,7 +484,7 @@ contract('BuyNowNative2', (accounts) => {
     receiptSetOnlyUser = await payments.setOnlyUserCanWithdraw(false, { from: paymentData.seller }).should.be.fulfilled;
     feeSetOnlyUser.iadd(getGasFee(receiptSetOnlyUser));
 
-    await payments.withdrawTo(paymentData.seller).should.be.fulfilled;
+    await payments.relayedWithdraw(paymentData.seller).should.be.fulfilled;
 
     expectedPaymentsSeller = toBN(0);
     expectedNativeSeller.iadd(toBN(sellerAmount)).isub(feeSetOnlyUser);
@@ -503,7 +503,7 @@ contract('BuyNowNative2', (accounts) => {
 
     // Finally, feesCollector can withdraw too, leaving zero balances in the payments contract
     // and the expected amounts in the external balance
-    await payments.withdrawTo(feesCollector).should.be.fulfilled;
+    await payments.relayedWithdraw(feesCollector).should.be.fulfilled;
 
     expectedPaymentsFeesCollector = toBN(0);
     expectedNativeFeesCollector.iadd(toBN(feeAmount));

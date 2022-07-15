@@ -319,7 +319,7 @@
 <text text-anchor="start" x="1195.6957" y="-1239.5" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;finalizeAndWithdraw(transferResult: AssetTransferResult, operatorSignature: bytes)</text>
 <text text-anchor="start" x="1195.6957" y="-1222.7" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;refundAndWithdraw(paymentId: bytes32)</text>
 <text text-anchor="start" x="1195.6957" y="-1205.9" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;withdraw()</text>
-<text text-anchor="start" x="1195.6957" y="-1189.1" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;withdrawTo(recipient: address)</text>
+<text text-anchor="start" x="1195.6957" y="-1189.1" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;relayedWithdraw(recipient: address)</text>
 <text text-anchor="start" x="1195.6957" y="-1172.3" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;withdrawAmount(amount: uint256)</text>
 <text text-anchor="start" x="1195.6957" y="-1155.5" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;isSellerRegistrationRequired(): bool</text>
 <text text-anchor="start" x="1195.6957" y="-1138.7" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;isRegisteredSeller(addr: address): bool</text>
@@ -410,7 +410,7 @@
 <text text-anchor="start" x="667.0888" y="-2325.3" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;&#160;refund(paymentId: bytes32)</text>
 <text text-anchor="start" x="667.0888" y="-2308.5" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;&#160;refundAndWithdraw(paymentId: bytes32)</text>
 <text text-anchor="start" x="667.0888" y="-2291.7" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;&#160;withdraw()</text>
-<text text-anchor="start" x="667.0888" y="-2274.9" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;&#160;withdrawTo(recipient: address)</text>
+<text text-anchor="start" x="667.0888" y="-2274.9" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;&#160;relayedWithdraw(recipient: address)</text>
 <text text-anchor="start" x="667.0888" y="-2258.1" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;&#160;withdrawAmount(amount: uint256)</text>
 <text text-anchor="start" x="667.0888" y="-2241.3" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;&#160;isSellerRegistrationRequired(): bool</text>
 <text text-anchor="start" x="667.0888" y="-2224.5" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;&#160;isRegisteredSeller(addr: address): bool</text>
