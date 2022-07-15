@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 /* eslint-disable no-undef */
 
 const { assert } = require('chai');
@@ -5,7 +6,7 @@ const truffleAssert = require('truffle-assertions');
 const ethSigUtil = require('eth-sig-util');
 const { prepareDataToSignBuyNow, prepareDataToSignAssetTransfer } = require('../helpers/signer');
 const {
-  fromHexString, toBN, provideFunds, registerAccountInLocalTestnet, getGasFee, assertBalances,
+  fromHexString, toBN, provideFunds, registerAccountInLocalTestnet, getGasFee, assertBalances, addressFromPk, generateSellerSig,
 } = require('../helpers/utils');
 const { TimeTravel } = require('../helpers/TimeTravel');
 
@@ -20,12 +21,15 @@ contract('BuyNowNative1', (accounts) => {
   // eslint-disable-next-line no-unused-vars
   const it2 = async (text, f) => {};
   const CURRENCY_DESCRIPTOR = 'SUPER COIN';
-  const [deployer, alice] = accounts;
+  const [deployer] = accounts;
   const feesCollector = deployer;
+  const sellerPrivKey = '0x4f3edf983ac636a65a842ce7c78d9aa706d3b113bce9c46f30d7d21715b23b1d';
   const buyerPrivKey = '0x3B878F7892FBBFA30C8AED1DF317C19B853685E707C2CF0EE1927DC516060A54';
   const operatorPrivKey = '0x4A878F7892FBBFA30C8AED1DF317C19B853685E707C2CF0EE1927DC516060A54';
+  const sellerAccount = web3.eth.accounts.privateKeyToAccount(sellerPrivKey);
   const buyerAccount = web3.eth.accounts.privateKeyToAccount(buyerPrivKey);
   const operatorAccount = web3.eth.accounts.privateKeyToAccount(operatorPrivKey);
+  const alice = sellerAccount.address;
   const operator = operatorAccount.address;
   const defaultAmount = 300;
   const defaultFeeBPS = 500; // 5%
@@ -46,6 +50,7 @@ contract('BuyNowNative1', (accounts) => {
   const initialBuyerETH = 1000000000000000000;
   const initialOperatorETH = 6000000000000000000;
   const timeTravel = new TimeTravel(web3);
+  const minimalSupply = Math.round(Number(initialBuyerETH) / 10);
 
   let eip712;
   let payments;
@@ -55,6 +60,7 @@ contract('BuyNowNative1', (accounts) => {
     snapshot = await timeTravel.takeSnapshot();
     eip712 = await EIP712Verifier.new('LivingAssets Native CryptoPayments', '1').should.be.fulfilled;
     payments = await BuyNowNative.new(CURRENCY_DESCRIPTOR, eip712.address).should.be.fulfilled;
+    await registerAccountInLocalTestnet(sellerAccount).should.be.fulfilled;
     await registerAccountInLocalTestnet(buyerAccount).should.be.fulfilled;
     await registerAccountInLocalTestnet(operatorAccount).should.be.fulfilled;
     await provideFunds(deployer, operator, initialOperatorETH);
@@ -87,9 +93,8 @@ contract('BuyNowNative1', (accounts) => {
   // Executes a Payment directly by buyer. Reused by many tests.
   // It first funds the buyer, then buyer approves, operators signs,
   // and the buyer relays the payment.
-  async function buyNow(_paymentData, _ETHSupplyForBuyer) {
+  async function buyNow(_sellerPrivKey, _paymentData, _ETHSupplyForBuyer) {
     await provideFunds(deployer, buyerAccount.address, _ETHSupplyForBuyer);
-    await payments.registerAsSeller({ from: _paymentData.seller }).should.be.fulfilled;
 
     // Operator signs purchase
     const signature = ethSigUtil.signTypedMessage(
@@ -102,7 +107,10 @@ contract('BuyNowNative1', (accounts) => {
     );
 
     // Pay
-    await payments.buyNow(_paymentData, signature, { from: _paymentData.buyer, value: _paymentData.amount });
+    const sigSeller = generateSellerSig(_sellerPrivKey, _paymentData.paymentId);
+    await provideFunds(deployer, addressFromPk(_sellerPrivKey), minimalSupply);
+    await payments.registerAsSeller({ from: _paymentData.seller }).should.be.fulfilled;
+    await payments.buyNow(_paymentData, signature, sigSeller, { from: _paymentData.buyer, value: _paymentData.amount });
     return signature;
   }
 
@@ -113,20 +121,20 @@ contract('BuyNowNative1', (accounts) => {
   });
 
   it('Payment execution results in funds received by Payments contract', async () => {
-    await buyNow(paymentData, initialBuyerETH);
+    await buyNow(sellerPrivKey, paymentData, initialBuyerETH);
     assert.equal(Number(await web3.eth.getBalance(payments.address)), paymentData.amount);
   });
 
   it('Payment execution fails if deadline to pay expired', async () => {
     await timeTravel.wait(timeToPay + 10);
     await truffleAssert.reverts(
-      buyNow(paymentData, initialBuyerETH),
+      buyNow(sellerPrivKey, paymentData, initialBuyerETH),
       'payment deadline expired',
     );
   });
 
   it('Payment info is stored correctly', async () => {
-    await buyNow(paymentData, initialBuyerETH);
+    await buyNow(sellerPrivKey, paymentData, initialBuyerETH);
     assert.equal(await payments.paymentState(paymentData.paymentId), ASSET_TRANSFERRING);
     const info = await payments.paymentInfo(paymentData.paymentId);
     assert.equal(info.state, ASSET_TRANSFERRING);
@@ -140,7 +148,7 @@ contract('BuyNowNative1', (accounts) => {
   });
 
   it('Events are emitted in a payment', async () => {
-    await buyNow(paymentData, initialBuyerETH);
+    await buyNow(sellerPrivKey, paymentData, initialBuyerETH);
     const past = await payments.getPastEvents('BuyNow', { fromBlock: 0, toBlock: 'latest' }).should.be.fulfilled;
     assert.equal(past[0].args.paymentId, paymentData.paymentId);
     assert.equal(past[0].args.buyer, paymentData.buyer);
@@ -148,7 +156,7 @@ contract('BuyNowNative1', (accounts) => {
   });
 
   it('Events are emitted in a payment', async () => {
-    await buyNow(paymentData, initialBuyerETH);
+    await buyNow(sellerPrivKey, paymentData, initialBuyerETH);
     const past = await payments.getPastEvents('BuyNow', { fromBlock: 0, toBlock: 'latest' }).should.be.fulfilled;
     assert.equal(past[0].args.paymentId, paymentData.paymentId);
     assert.equal(past[0].args.buyer, paymentData.buyer);
@@ -156,6 +164,7 @@ contract('BuyNowNative1', (accounts) => {
   });
 
   it('Users can set onlyUserCanWithdraw', async () => {
+    await provideFunds(deployer, alice, minimalSupply);
     assert.equal(await payments.onlyUserCanWithdraw(alice), false);
     await payments.setOnlyUserCanWithdraw(true, { from: alice }).should.be.fulfilled;
     assert.equal(await payments.onlyUserCanWithdraw(alice), true);
@@ -173,6 +182,7 @@ contract('BuyNowNative1', (accounts) => {
 
   it('Sellers can register', async () => {
     assert.equal(await payments.isRegisteredSeller(alice), false);
+    await provideFunds(deployer, alice, minimalSupply);
     await payments.registerAsSeller({ from: alice }).should.be.fulfilled;
     assert.equal(await payments.isRegisteredSeller(alice), true);
 
@@ -182,6 +192,7 @@ contract('BuyNowNative1', (accounts) => {
   });
 
   it('Sellers cannot register more than once', async () => {
+    await provideFunds(deployer, alice, minimalSupply);
     await payments.registerAsSeller({ from: alice }).should.be.fulfilled;
     await truffleAssert.reverts(
       payments.registerAsSeller({ from: alice }),
@@ -284,7 +295,7 @@ contract('BuyNowNative1', (accounts) => {
     // create BuyNow with initial operator
     const initialOperator = await payments.universeOperator(paymentData.universeId);
     assert.equal(initialOperator, operator);
-    await buyNow(paymentData, initialBuyerETH);
+    await buyNow(sellerPrivKey, paymentData, initialBuyerETH);
 
     // change operator:
     await payments.setUniverseOperator(paymentData.universeId, paymentData.buyer);
@@ -314,7 +325,7 @@ contract('BuyNowNative1', (accounts) => {
 
   it('Test splitFundingSources with non-zero local balance', async () => {
     // First complete a sell, so that seller has local balance
-    await buyNow(paymentData, initialBuyerETH);
+    await buyNow(sellerPrivKey, paymentData, initialBuyerETH);
     await finalize(paymentData.paymentId, true, operatorPrivKey);
     const feeAmount = Math.floor(Number(paymentData.amount) * paymentData.feeBPS) / 10000;
     const localFunds = toBN(Number(paymentData.amount) - feeAmount);
@@ -339,7 +350,7 @@ contract('BuyNowNative1', (accounts) => {
     const paymentData2 = JSON.parse(JSON.stringify(paymentData));
     paymentData2.amount = 0;
     await truffleAssert.reverts(
-      buyNow(paymentData2, initialBuyerETH),
+      buyNow(sellerPrivKey, paymentData2, initialBuyerETH),
       'payment amount cannot be zero',
     );
   });
@@ -348,7 +359,7 @@ contract('BuyNowNative1', (accounts) => {
     const paymentData2 = JSON.parse(JSON.stringify(paymentData));
     paymentData2.feeBPS = 10001;
     await truffleAssert.reverts(
-      buyNow(paymentData2, initialBuyerETH),
+      buyNow(sellerPrivKey, paymentData2, initialBuyerETH),
       'fee cannot be larger than maxFeeBPS',
     );
   });
@@ -357,7 +368,7 @@ contract('BuyNowNative1', (accounts) => {
     const paymentData2 = JSON.parse(JSON.stringify(paymentData));
     paymentData2.deadline = 1;
     await truffleAssert.reverts(
-      buyNow(paymentData2, initialBuyerETH),
+      buyNow(sellerPrivKey, paymentData2, initialBuyerETH),
       'payment deadline expired',
     );
   });
@@ -366,7 +377,7 @@ contract('BuyNowNative1', (accounts) => {
     const paymentData2 = JSON.parse(JSON.stringify(paymentData));
     paymentData2.feeBPS = 10022;
     await truffleAssert.reverts(
-      buyNow(paymentData2, initialBuyerETH),
+      buyNow(sellerPrivKey, paymentData2, initialBuyerETH),
       'fee cannot be larger than maxFeeBPS',
     );
   });
@@ -383,7 +394,7 @@ contract('BuyNowNative1', (accounts) => {
   });
 
   it('enoughFundsAvailable by using part in local balance', async () => {
-    await buyNow(paymentData, initialBuyerETH);
+    await buyNow(sellerPrivKey, paymentData, initialBuyerETH);
 
     const sellerInitBalance = await web3.eth.getBalance(paymentData.seller);
 
@@ -426,7 +437,7 @@ contract('BuyNowNative1', (accounts) => {
 
     // Payment fails
     await truffleAssert.reverts(
-      buyNow(paymentData2, initialBuyerETH),
+      buyNow(sellerPrivKey, paymentData2, initialBuyerETH),
       'operator must be an observer',
     );
   });
@@ -438,7 +449,7 @@ contract('BuyNowNative1', (accounts) => {
 
     // Payment fails
     await truffleAssert.reverts(
-      buyNow(paymentData2, initialBuyerETH),
+      buyNow(operatorPrivKey, paymentData2, initialBuyerETH),
       'operator must be an observer',
     );
   });
