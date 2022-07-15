@@ -151,7 +151,7 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
     }
 
     /// @inheritdoc IBuyNowBase
-    function withdrawTo(address recipient) external {
+    function relayedWithdraw(address recipient) external {
         require(
             !_onlyUserCanWithdraw[recipient],
             "tx sender not authorized to withdraw on recipients behalf"

@@ -256,7 +256,7 @@ interface IBuyNowBase is ISignableStructsBuyNow {
      *  covers gas costs and the hassle of executing the transaction.
      *  Users can always opt out from this feature, using the setOnlyUserCanWithdraw method.
      */
-    function withdrawTo(address recipient) external;
+    function relayedWithdraw(address recipient) external;
 
     /**
      * @notice Transfers only the specified amount
