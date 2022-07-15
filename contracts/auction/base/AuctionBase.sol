@@ -102,7 +102,7 @@ abstract contract AuctionBase is IAuctionBase, BuyNowBase {
      * @param operator The address of the operator of this payment.
      * @param bidInput The BidInput struct
      */
-    function _processBid(address operator, BidInput memory bidInput) internal {
+    function _processBid(address operator, BidInput calldata bidInput) internal {
         State state = assertBidInputsOK(bidInput);
         assertSeparateRoles(operator, bidInput.bidder, bidInput.seller);
         (uint256 newFundsNeeded, uint256 localFunds, bool isSameBidder) = splitAuctionFundingSources(bidInput);
@@ -221,12 +221,11 @@ abstract contract AuctionBase is IAuctionBase, BuyNowBase {
     // VIEW FUNCTIONS
 
     /// @inheritdoc IAuctionBase
-    function assertBidInputsOK(BidInput memory bidInput)
+    function assertBidInputsOK(BidInput calldata bidInput)
         public
         view
         returns (State state)
     {
-        state = paymentState(bidInput.paymentId);
         uint256 currentTime = block.timestamp;
 
         // requirements independent of current auction state:
@@ -242,6 +241,7 @@ abstract contract AuctionBase is IAuctionBase, BuyNowBase {
         }
 
         // requirements that depend on current auction state:
+        state = paymentState(bidInput.paymentId);
         if (state == State.NotStarted) {
             // if auction does not exist yet, assert values are within obvious limits 
             require(
@@ -268,7 +268,7 @@ abstract contract AuctionBase is IAuctionBase, BuyNowBase {
     }
 
     /// @inheritdoc IAuctionBase
-    function splitAuctionFundingSources(BidInput memory bidInput)
+    function splitAuctionFundingSources(BidInput calldata bidInput)
         public
         view
         returns (
