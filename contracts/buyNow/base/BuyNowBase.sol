@@ -127,7 +127,7 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
         _finalize(transferResult, operatorSignature);
         // withdrawal cannot fail due to zero balance, since
         // balance has just been increased when finalizing the payment:
-        _withdrawAmount(recipient, _balanceOf[recipient], 0);
+        _withdrawAmount(recipient, _balanceOf[recipient]);
     }
 
     /// @inheritdoc IBuyNowBase
@@ -145,7 +145,7 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
         _refund(paymentId);
         // withdrawal cannot fail due to zero balance, since
         // balance has just been increased when refunding:
-        _withdrawAmount(recipient, _balanceOf[recipient], 0);
+        _withdrawAmount(recipient, _balanceOf[recipient]);
     }
 
     /// @inheritdoc IBuyNowBase
@@ -159,17 +159,12 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
             !_onlyUserCanWithdraw[recipient] || (msg.sender == recipient),
             "BuyNowBase::relayedWithdraw: tx sender not authorized to withdraw on recipients behalf"
         );
-        _withdrawAmount(recipient, _balanceOf[recipient], 0);
+        _withdrawAmount(recipient, _balanceOf[recipient]);
     }
 
     /// @inheritdoc IBuyNowBase
     function withdrawAmount(uint256 amount) external {
-        uint256 balance = _balanceOf[msg.sender];
-        require(
-            balance >= amount,
-            "BuyNowBase::withdrawAmount: not enough balance to withdraw specified amount"
-        );
-        _withdrawAmount(msg.sender, amount, balance - amount);
+        _withdrawAmount(msg.sender, amount);
     }
 
     // PRIVATE & INTERNAL FUNCTIONS
@@ -309,25 +304,32 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
      *  to protect against re-entrancy attacks.
      */
     function _withdraw() private {
-        _withdrawAmount(msg.sender, _balanceOf[msg.sender], 0);
+        _withdrawAmount(msg.sender, _balanceOf[msg.sender]);
     }
 
     /**
      * @dev (private) Transfers the specified amount of 
      *  funds in this contract's balanceOf[recipient] to the recipient address.
-     *  The checks that enough amount is available, and the computation
-     *  of the final balance need to be done before calling this function.
      *  Follows standard Checks-Effects-Interactions pattern
      *  to protect against re-entrancy attacks.
      * @param recipient The address of to transfer funds from the local contract
      * @param amount The amount to withdraw.
-     * @param finalBalance The final balance of msg.sender after withdrawal.
     */
-    function _withdrawAmount(address recipient, uint256 amount, uint256 finalBalance) private {
-        // requirement:
-        require(amount > 0, "BuyNowBase::_withdrawAmount: cannot withdraw zero amount");
+    function _withdrawAmount(address recipient, uint256 amount) private {
+        // requirements: 
+        //  1. check that there is enough balance
+        uint256 currentBalance = _balanceOf[recipient];
+        require(
+            currentBalance >= amount,
+            "BuyNowBase::_withdrawAmount: not enough balance to withdraw specified amount"
+        );
+        //  2. prevent dummy withdrawals with 0 amount to avoid useless events 
+        require(
+            amount > 0,
+            "BuyNowBase::_withdrawAmount: cannot withdraw zero amount"
+        );
         // effect:
-        _balanceOf[recipient] = finalBalance;
+        _balanceOf[recipient] = currentBalance - amount;
         // interaction:
         _transfer(recipient, amount);
         emit Withdraw(recipient, amount);
