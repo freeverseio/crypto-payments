@@ -1,3 +1,4 @@
+/* eslint-disable no-underscore-dangle */
 /* eslint-disable no-await-in-loop */
 /* eslint-disable no-undef */
 
@@ -134,6 +135,17 @@ contract('AuctionNative3', (accounts) => {
     );
   });
 
+  it('endsAt cannot be too large', async () => {
+    const maxAuctionDuration = Number(await payments._MAX_AUCTION_DURATION());
+    const bidData2 = JSON.parse(JSON.stringify(bidData));
+    const now2 = Math.floor(Date.now() / 1000);
+    bidData2.endsAt = now2 + maxAuctionDuration + 300;
+    await truffleAssert.reverts(
+      bid(bidData2, initialBuyerETH),
+      'endsAt exceeds maximum allowed',
+    );
+  });
+
   it('AUCTIONING moves to ASSET TRANSFERRING after endsAt', async () => {
     await bid(bidData, initialBuyerETH);
     assert.equal(await payments.paymentState(bidData.paymentId), AUCTIONING);
@@ -191,31 +203,5 @@ contract('AuctionNative3', (accounts) => {
 
     await timeTravel.waitUntil(beforeEndsAt + 100);
     assert.equal(await payments.paymentState(bidData.paymentId), ASSET_TRANSFERRING);
-  });
-
-  it('Auctions can not be created such that extendableUntil is too close to expirationTime', async () => {
-    // This test shows that auctions need to be created unless enough time is left
-    // for the asset transfer stage before the expiration time.
-    // Note that:
-    // - extendableUntil = endsAt + extendableBy
-    // - expirationTime  = endsAt + paymentWindow;
-    const paymentWindow = Number(await payments.paymentWindow());
-    let extendableBy = paymentWindow - 3600 * 1;
-    await payments.setDefaultAuctionConfig(1, 1, extendableBy);
-    await truffleAssert.reverts(
-      bid(bidData, initialBuyerETH),
-      'cannot start auction that is extendable too close to expiration time',
-    );
-
-    extendableBy = paymentWindow - 3600 * 2 + 1;
-    await payments.setDefaultAuctionConfig(1, 1, extendableBy);
-    await truffleAssert.reverts(
-      bid(bidData, initialBuyerETH),
-      'cannot start auction that is extendable too close to expiration time',
-    );
-
-    extendableBy = paymentWindow - 3600 * 2 - 1;
-    await payments.setDefaultAuctionConfig(1, 1, extendableBy);
-    await bid(bidData, initialBuyerETH).should.be.fulfilled;
   });
 });

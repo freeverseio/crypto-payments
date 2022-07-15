@@ -903,7 +903,7 @@ contract('AuctionERC20_2', (accounts) => {
 
     // Let's move to FAILED implicitly, by going beyond expiration time:
     const paymentWindow = await payments.paymentWindow();
-    await timeTravel.waitUntil(endsAt + Number(paymentWindow) + 10);
+    await timeTravel.waitUntil(endsAt + defaultExtendableBy + Number(paymentWindow) + 10);
 
     assert.equal(await payments.paymentState(bidData.paymentId), ASSET_TRANSFERRING);
 
@@ -1021,7 +1021,7 @@ contract('AuctionERC20_2', (accounts) => {
 
     // wait just before expiration time, and check that state has not changed yet
     const paymentWindow = await payments.paymentWindow();
-    await timeTravel.waitUntil(endsAt + Number(paymentWindow) - 100);
+    await timeTravel.waitUntil(endsAt + defaultExtendableBy + Number(paymentWindow) - 100);
     assert.equal(await payments.acceptsRefunds(bidData.paymentId), false);
 
     // wait the remainder period to get beyond expiration time,
@@ -1042,7 +1042,7 @@ contract('AuctionERC20_2', (accounts) => {
 
     // wait beyond payment window to move to FAILED
     const paymentWindow = await payments.paymentWindow();
-    await timeTravel.wait(Number(paymentWindow) + 5);
+    await timeTravel.wait(defaultExtendableBy + Number(paymentWindow) + 5);
     assert.equal(await payments.acceptsRefunds(bidData.paymentId), true);
     // Check expected ERC20 of buyer before refunding:
     expectedERC20Buyer.iadd(toBN(initialBuyerERC20)).isub(toBN(bidData.bidAmount));
@@ -1076,7 +1076,7 @@ contract('AuctionERC20_2', (accounts) => {
 
     // wait beyond payment window to move to FAILED
     const paymentWindow = await payments.paymentWindow();
-    await timeTravel.wait(Number(paymentWindow) + 5);
+    await timeTravel.wait(defaultExtendableBy + Number(paymentWindow) + 5);
     assert.equal(await payments.acceptsRefunds(bidData.paymentId), true);
     // Check expected ERC20 of buyer before refunding:
     expectedERC20Buyer.iadd(toBN(initialBuyerERC20)).isub(toBN(bidData.bidAmount));

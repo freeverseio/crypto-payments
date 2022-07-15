@@ -1,3 +1,4 @@
+/* eslint-disable no-underscore-dangle */
 /* eslint-disable max-len */
 /* eslint-disable no-await-in-loop */
 /* eslint-disable no-undef */
@@ -201,6 +202,35 @@ contract('AuctionERC20_1', (accounts) => {
         defaultExtendableBy,
       ),
       'minIncreasePercentage must be non-zero',
+    );
+  });
+
+  it('Cannot set too large extendableBy', async () => {
+    const maxExtendableBy = Number(await payments._MAX_EXTENDABLE_BY());
+    assert.equal(maxExtendableBy, 2 * 24 * 3600);
+
+    // reverts on set default
+    await truffleAssert.reverts(
+      payments.setDefaultAuctionConfig(defaultMinPercent, defaultTimeToExtend, maxExtendableBy + 1),
+      'extendableBy exceeds maximum allowed',
+    );
+    // reverts on set universe specific
+    const universeId = 12;
+    await truffleAssert.reverts(
+      payments.setUniverseAuctionConfig(universeId, defaultMinPercent, defaultTimeToExtend, maxExtendableBy + 1),
+      'extendableBy exceeds maximum allowed',
+    );
+    // reverts on deploy
+    await truffleAssert.fails(
+      AuctionERC20.new(
+        erc20.address,
+        CURRENCY_DESCRIPTOR,
+        eip712.address,
+        defaultMinPercent,
+        defaultTimeToExtend,
+        maxExtendableBy + 1,
+      ),
+      'extendableBy exceeds maximum allowed',
     );
   });
 
