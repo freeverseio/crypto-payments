@@ -163,8 +163,8 @@ interface IBuyNowBase is ISignableStructsBuyNow {
         // (subtracting fees) on a successful payment.        
         address seller;
 
-        // The address of the operator of this payment
-        address operator;
+        // the id of the universe that the asset belongs to.
+        uint256 universeId;
 
         // The address of the feesCollector of this payment
         address feesCollector;

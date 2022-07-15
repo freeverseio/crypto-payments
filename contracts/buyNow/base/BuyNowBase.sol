@@ -229,7 +229,7 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
             State.AssetTransferring,
             buyNowInp.buyer,
             buyNowInp.seller,
-            operator,
+            buyNowInp.universeId,
             universeFeesCollector(buyNowInp.universeId),
             block.timestamp + _paymentWindow,
             buyNowInp.feeBPS,
@@ -273,7 +273,7 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
             IEIP712VerifierBuyNow(_eip712).verifyAssetTransferResult(
                 transferResult,
                 operatorSignature,
-                payment.operator
+                universeOperator(payment.universeId)
             ),
             "BuyNowBase::_finalize: only the operator can sign an assetTransferResult"
         );

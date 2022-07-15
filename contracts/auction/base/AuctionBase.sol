@@ -127,7 +127,7 @@ abstract contract AuctionBase is IAuctionBase, BuyNowBase {
                 State.Auctioning,
                 bidInput.bidder,
                 bidInput.seller,
-                operator,
+                bidInput.universeId,
                 universeFeesCollector(bidInput.universeId),
                 expirationTime,
                 bidInput.feeBPS,
