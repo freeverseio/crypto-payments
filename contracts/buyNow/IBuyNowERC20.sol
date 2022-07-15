@@ -62,6 +62,28 @@ interface IBuyNowERC20 is IBuyNowBase {
     function erc20() external view returns (address);
 
     /**
+     * @notice Proxy that queries the name() method from an external
+     *  ERC20 contract, which may optionally implement it. 
+     * @return the return of the name() method call to the ERC20 contract
+     */
+    function erc20ContractName() external view returns (string memory);
+
+    /**
+     * @notice Proxy that queries the symbol() method from an external
+     *  ERC20 contract, which may optionally implement it. 
+     * @return the return of the symbol() method call to the ERC20 contract
+     */
+    function erc20ContractSymbol() external view returns (string memory);
+
+
+    /**
+     * @notice Proxy that queries the decimals() method from an external
+     *  ERC20 contract, which may optionally implement it. 
+     * @return the return of the decimals() method call to the ERC20 contract
+     */
+    function erc20ContractDecimals() external view returns (uint8);
+
+    /**
      * @notice Returns the ERC20 balance of address in the ERC20 contract
      * @param addr the address that is queried
      * @return the balance in the external ERC20 contract

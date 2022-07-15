@@ -3,6 +3,7 @@ pragma solidity =0.8.14;
 
 import "./IBuyNowERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "./IERC20Detailed.sol";
 import "./base/BuyNowBase.sol";
 
 /**
@@ -100,6 +101,21 @@ contract BuyNowERC20 is IBuyNowERC20, BuyNowBase {
     /// @inheritdoc IBuyNowERC20
     function erc20() external view returns (address) {
         return _erc20;
+    }
+
+    /// @inheritdoc IBuyNowERC20
+    function erc20ContractName() external view returns (string memory) {
+        return IERC20Detailed(_erc20).name();
+    }
+
+    /// @inheritdoc IBuyNowERC20
+    function erc20ContractSymbol() external view returns (string memory) {
+        return IERC20Detailed(_erc20).symbol();
+    }
+
+    /// @inheritdoc IBuyNowERC20
+    function erc20ContractDecimals() external view returns (uint8) {
+        return IERC20Detailed(_erc20).decimals();
     }
 
     /// @inheritdoc IBuyNowERC20
