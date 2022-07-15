@@ -258,18 +258,6 @@ abstract contract AuctionBase is IAuctionBase, BuyNowBase {
             );
         } else if (state == State.Auctioning) {
             // if auction exists already:
-            // - check signed feeBPS is the same as in the ongoing bid
-            require(
-                bidInput.feeBPS == _payments[bidInput.paymentId].feeBPS,
-                "AuctionBase::assertBidInputsOK: fee does not match on-going auction fee"
-            );
-            // - check signed endsAt, even if not identical to starting bid
-            //   (due to possible extensions on late bids), is still within extendableUntil
-            require(
-                bidInput.endsAt <=
-                    _auctions[bidInput.paymentId].extendableUntil,
-                "AuctionBase::assertBidInputsOK: endsAt does not correspond to on-going auction data"
-            );
             require(
                 bidInput.bidAmount >= minNewBidAmount(bidInput.paymentId),
                 "AuctionBase::assertBidInputsOK: bid needs to be larger than previous bid by a certain percentage"
