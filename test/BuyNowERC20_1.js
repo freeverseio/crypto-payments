@@ -268,6 +268,12 @@ contract('BuyNowERC20_1', (accounts) => {
   });
 
   it('Set EIP712 verifier contract works as expected', async () => {
+    // on deploy:
+    let past = await payments.getPastEvents('EIP712', { fromBlock: 0, toBlock: 'latest' }).should.be.fulfilled;
+    assert.equal(past[0].args.eip712address, eip712.address);
+    assert.equal(past[0].args.prevEip712address, '0x0000000000000000000000000000000000000000');
+
+    // after deploy:
     const newAddress = '0x71C7656EC7ab88b098defB751B7401B5f6d8976F';
     await truffleAssert.reverts(
       payments.setEIP712(newAddress, { from: alice }),
@@ -277,11 +283,19 @@ contract('BuyNowERC20_1', (accounts) => {
     assert.equal(Number(await payments.EIP712Address()), newAddress);
 
     // check event
-    const past = await payments.getPastEvents('EIP712', { fromBlock: 0, toBlock: 'latest' }).should.be.fulfilled;
-    assert.equal(past[0].args.eip712address, newAddress);
+    past = await payments.getPastEvents('EIP712', { fromBlock: 0, toBlock: 'latest' }).should.be.fulfilled;
+    assert.equal(past[1].args.eip712address, newAddress);
+    assert.equal(past[1].args.prevEip712address, eip712.address);
   });
 
   it('Set payment window works if within limits', async () => {
+    // on deploy:
+    let past = await payments.getPastEvents('PaymentWindow', { fromBlock: 0, toBlock: 'latest' }).should.be.fulfilled;
+    const days30 = 30 * 24 * 3600;
+    assert.equal(past[0].args.window, days30);
+    assert.equal(past[0].args.prevWindow, 0);
+
+    // after deploy:
     const newVal = 12345;
     await truffleAssert.reverts(
       payments.setPaymentWindow(newVal, { from: alice }),
@@ -291,8 +305,9 @@ contract('BuyNowERC20_1', (accounts) => {
     assert.equal(Number(await payments.paymentWindow()), newVal);
 
     // check event
-    const past = await payments.getPastEvents('PaymentWindow', { fromBlock: 0, toBlock: 'latest' }).should.be.fulfilled;
-    assert.equal(past[0].args.window, newVal);
+    past = await payments.getPastEvents('PaymentWindow', { fromBlock: 0, toBlock: 'latest' }).should.be.fulfilled;
+    assert.equal(past[1].args.window, newVal);
+    assert.equal(past[1].args.prevWindow, days30);
   });
 
   it('Set payment window fails if below limit', async () => {
@@ -314,6 +329,13 @@ contract('BuyNowERC20_1', (accounts) => {
   });
 
   it('Set maxFeeBPS works if within limits', async () => {
+    // on deploy:
+    let past = await payments.getPastEvents('MaxFeeBPS', { fromBlock: 0, toBlock: 'latest' }).should.be.fulfilled;
+    const fee30percent = 3000;
+    assert.equal(past[0].args.maxFeeBPS, fee30percent);
+    assert.equal(past[0].args.prevMaxFeeBPS, 0);
+
+    // after deploy:
     const newVal = 6000;
     await truffleAssert.reverts(
       payments.setMaxFeeBPS(newVal, { from: alice }),
@@ -323,8 +345,9 @@ contract('BuyNowERC20_1', (accounts) => {
     assert.equal(Number(await payments.maxFeeBPS()), newVal);
 
     // check event
-    const past = await payments.getPastEvents('MaxFeeBPS', { fromBlock: 0, toBlock: 'latest' }).should.be.fulfilled;
-    assert.equal(past[0].args.maxFeeBPS, newVal);
+    past = await payments.getPastEvents('MaxFeeBPS', { fromBlock: 0, toBlock: 'latest' }).should.be.fulfilled;
+    assert.equal(past[1].args.maxFeeBPS, newVal);
+    assert.equal(past[1].args.prevMaxFeeBPS, fee30percent);
   });
 
   it('Set maxFeeBPS fails if below limit', async () => {

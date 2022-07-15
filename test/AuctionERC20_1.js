@@ -152,11 +152,6 @@ contract('AuctionERC20_1', (accounts) => {
 
   // eslint-disable-next-line no-unused-vars
 
-  it('Correct defaultTimeToExtend on deploy', async () => {
-    const conf = await payments.defaultAuctionConfig();
-    assert.equal(Number(await conf.timeToExtend), defaultTimeToExtend);
-  });
-
   it('Bid execution results in funds received by Payments contract', async () => {
     await bid(bidData, initialBuyerERC20, initialBuyerETH);
     assert.equal(Number(await erc20.balanceOf(payments.address)), bidData.bidAmount);
@@ -209,13 +204,24 @@ contract('AuctionERC20_1', (accounts) => {
     );
   });
 
-  it('Correct default extendableBy on deploy', async () => {
+  it('Correct default auctionConfig on deploy', async () => {
     const conf = await payments.defaultAuctionConfig();
     assert.equal(Number(await conf.timeToExtend), defaultTimeToExtend);
+    assert.equal(await conf.minIncreasePercentage, defaultMinPercent);
+    assert.equal(await conf.timeToExtend, defaultTimeToExtend);
     assert.equal(await conf.extendableBy, defaultExtendableBy);
+
     const past = await payments.getPastEvents('DefaultAuctionConfig', { fromBlock: 0, toBlock: 'latest' }).should.be.fulfilled;
+    assert.equal(past[0].args.minIncreasePercentage, defaultMinPercent);
+    assert.equal(past[0].args.prevMinIncreasePercentage, 0);
+    assert.equal(past[0].args.timeToExtend, defaultTimeToExtend);
+    assert.equal(past[0].args.prevTimeToExtend, 0);
     assert.equal(past[0].args.extendableBy, defaultExtendableBy);
+    assert.equal(past[0].args.prevExtendableBy, 0);
+
     const universeId = 12;
+    assert.equal(await payments.universeMinIncreasePercentage(universeId), defaultMinPercent);
+    assert.equal(await payments.universeTimeToExtend(universeId), defaultTimeToExtend);
     assert.equal(await payments.universeExtendableBy(universeId), defaultExtendableBy);
   });
 
@@ -259,6 +265,10 @@ contract('AuctionERC20_1', (accounts) => {
     assert.equal(past[1].args.minIncreasePercentage, newMin);
     assert.equal(past[1].args.timeToExtend, newTime);
     assert.equal(past[1].args.extendableBy, newExtendable);
+    assert.equal(past[1].args.prevMinIncreasePercentage, defaultMinPercent);
+    assert.equal(past[1].args.prevTimeToExtend, defaultTimeToExtend);
+    assert.equal(past[1].args.prevExtendableBy, defaultExtendableBy);
+
     const universeId = 12;
     assert.equal(await payments.universeMinIncreasePercentage(universeId), newMin);
     assert.equal(await payments.universeTimeToExtend(universeId), newTime);
