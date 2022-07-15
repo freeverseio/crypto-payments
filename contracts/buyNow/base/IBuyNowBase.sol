@@ -62,24 +62,27 @@ interface IBuyNowBase is ISignableStructsBuyNow {
     /**
      * @dev Event emitted on change of EIP712 verifier contract address
      * @param eip712address The address of the new EIP712 verifier contract
+     * @param prevEip712address The previous value of eip712address
      */
 
-    event EIP712(address eip712address);
+    event EIP712(address eip712address, address prevEip712address);
 
     /**
      * @dev Event emitted on change of payment window
      * @param window The new amount of time after the arrival of a payment for which,
      *  in absence of confirmation of asset transfer success, a buyer is allowed to refund
+     * @param prevWindow The previous value of window
      */
-    event PaymentWindow(uint256 window);
+    event PaymentWindow(uint256 window, uint256 prevWindow);
 
     /**
      * @dev Event emitted on change of maximum fee BPS that can be accepted in any payment
      * @param maxFeeBPS the max fee (in BPS units) that can be accepted in any payment
      *  despite operator and buyer having signed a larger amount;
      *  a value of 10000 BPS would correspond to 100% (no limit at all)
+     * @param prevMaxFeeBPS The previous value of maxFeeBPS
      */
-    event MaxFeeBPS(uint256 maxFeeBPS);
+    event MaxFeeBPS(uint256 maxFeeBPS, uint256 prevMaxFeeBPS);
 
     /**
      * @dev Event emitted when a user executes the registerAsSeller method
@@ -95,8 +98,9 @@ interface IBuyNowBase is ISignableStructsBuyNow {
      *    and the hassle of executing the transaction)
      * @param user The address of the user.
      * @param onlyUserCanWithdraw true if only the user can execute withdrawals of his/her local balance
+     * @param prevOnlyUserCanWithdraw the previous value, overwritten by 'onlyUserCanWithdraw'
      */
-    event OnlyUserCanWithdraw(address indexed user, bool onlyUserCanWithdraw);
+    event OnlyUserCanWithdraw(address indexed user, bool onlyUserCanWithdraw, bool prevOnlyUserCanWithdraw);
 
     /**
      * @dev Event emitted when a buyer is refunded for a given payment process

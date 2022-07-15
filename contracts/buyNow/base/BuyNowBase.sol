@@ -49,11 +49,11 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
     mapping(address => uint256) internal _balanceOf;
 
     constructor(string memory currencyDescriptor, address eip712) {
-        _eip712 = eip712;
+        setEIP712(eip712);
         _acceptedCurrency = currencyDescriptor;
-        _paymentWindow = 30 days;
+        setPaymentWindow(30 days);
         _isSellerRegistrationRequired = false;
-        _maxFeeBPS = 3000; // 30%
+        setMaxFeeBPS(3000); // 30%
     }
 
     /**
@@ -62,9 +62,9 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
      *  EIP712 spec/code changes in the future
      * @param eip712address The address of the new EIP712 contract.
      */
-    function setEIP712(address eip712address) external onlyOwner {
+    function setEIP712(address eip712address) public onlyOwner {
+        emit EIP712(eip712address, _eip712);
         _eip712 = eip712address;
-        emit EIP712(eip712address);
     }
 
     /**
@@ -73,13 +73,13 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
      *  After this time, the payment moves to FAILED, allowing buyer to withdraw.
      * @param window The amount of time available, in seconds.
      */
-    function setPaymentWindow(uint256 window) external onlyOwner {
+    function setPaymentWindow(uint256 window) public onlyOwner {
         require(
             (window < 60 days) && (window > 3 hours),
             "BuyNowBase::setPaymentWindow: payment window outside limits"
         );
+        emit PaymentWindow(window, _paymentWindow);
         _paymentWindow = window;
-        emit PaymentWindow(window);
     }
 
     /**
@@ -88,13 +88,13 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
      *  a value of 10000 BPS would correspond to 100% (no limit at all)
      * @param feeBPS The new max fee (in BPS units)
      */
-    function setMaxFeeBPS(uint256 feeBPS) external onlyOwner {
+    function setMaxFeeBPS(uint256 feeBPS) public onlyOwner {
         require(
             (feeBPS <= 10000) && (feeBPS >= 0),
             "BuyNowBase::setMaxFeeBPS: maxFeeBPS outside limits"
         );
+        emit MaxFeeBPS(feeBPS, _maxFeeBPS);
         _maxFeeBPS = feeBPS;
-        emit MaxFeeBPS(feeBPS);
     }
 
     /**
@@ -121,8 +121,8 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
 
     /// @inheritdoc IBuyNowBase
     function setOnlyUserCanWithdraw(bool onlyUserCan) external {
+        emit OnlyUserCanWithdraw(msg.sender, onlyUserCan, _onlyUserCanWithdraw[msg.sender]);
         _onlyUserCanWithdraw[msg.sender] = onlyUserCan;
-        emit OnlyUserCanWithdraw(msg.sender, onlyUserCan);
     }
 
     /// @inheritdoc IBuyNowBase

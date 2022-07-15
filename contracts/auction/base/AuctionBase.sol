@@ -36,12 +36,11 @@ abstract contract AuctionBase is IAuctionBase, BuyNowBase {
         uint256 time2Extend,
         uint256 extendableBy
     ) {
-        _defaultAuctionConfig = _createAuctionConfig(
+       setDefaultAuctionConfig(
             minIncreasePercentage,
             time2Extend,
             extendableBy
         );
-        emit DefaultAuctionConfig(minIncreasePercentage, time2Extend, extendableBy);
     }
 
     /// @inheritdoc IAuctionBase
@@ -49,13 +48,17 @@ abstract contract AuctionBase is IAuctionBase, BuyNowBase {
         uint256 minIncreasePercentage,
         uint256 time2Extend,
         uint256 extendableBy
-    ) external onlyOwner {
+    ) public onlyOwner {
+        AuctionConfig memory oldConfig = _defaultAuctionConfig;
         _defaultAuctionConfig = _createAuctionConfig(
             minIncreasePercentage,
             time2Extend,
             extendableBy
         );
-        emit DefaultAuctionConfig(minIncreasePercentage, time2Extend, extendableBy);
+        emit DefaultAuctionConfig(
+            minIncreasePercentage, time2Extend, extendableBy,
+            oldConfig.minIncreasePercentage, oldConfig.timeToExtend, oldConfig.extendableBy
+        );
     }
 
     /// @inheritdoc IAuctionBase
@@ -65,6 +68,7 @@ abstract contract AuctionBase is IAuctionBase, BuyNowBase {
         uint256 time2Extend,
         uint256 extendableBy
     ) external onlyOwner {
+        AuctionConfig memory oldConfig =  _universeAuctionConfig[universeId];
         _universeAuctionConfig[universeId] = _createAuctionConfig(
             minIncreasePercentage,
             time2Extend,
@@ -73,9 +77,8 @@ abstract contract AuctionBase is IAuctionBase, BuyNowBase {
         _universeAuctionConfigExists[universeId] = true;
         emit UniverseAuctionConfig(
             universeId,
-            minIncreasePercentage,
-            time2Extend,
-            extendableBy
+            minIncreasePercentage, time2Extend, extendableBy,
+            oldConfig.minIncreasePercentage, oldConfig.timeToExtend, oldConfig.extendableBy
         );
     }
 
