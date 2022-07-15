@@ -669,7 +669,7 @@ contract('AuctionERC20_2', (accounts) => {
     );
   });
 
-  it('Bids after the first bid need to have coherent feeBPS and endsAt', async () => {
+  it('Bids after the first bid can have incoherent feeBPS and endsAt (check delegated to L2)', async () => {
     const bidData0 = JSON.parse(JSON.stringify(bidData));
     bidData0.bidAmount = 100;
 
@@ -682,22 +682,12 @@ contract('AuctionERC20_2', (accounts) => {
 
     // Try to place another bid with non-agreed feeBPS
     bidData2.feeBPS = 4132;
-    await truffleAssert.reverts(
-      bid(bidData2, bidIncrease, 0),
-      'fee does not match on-going auction fee.',
-    );
+    await bid(bidData2, bidIncrease, 0).should.be.fulfilled;
 
     // Try to place another bid with endsAt beyond extendableBy
-    bidData2.feeBPS = bidData0.feeBPS;
+    bidData2.bidAmount += bidIncrease;
     bidData2.endsAt = bidData0.endsAt + defaultExtendableBy + 1;
-    await truffleAssert.reverts(
-      bid(bidData2, bidIncrease, 0),
-      'endsAt does not correspond to on-going auction data',
-    );
-
-    // restoring default data works well:
-    bidData2.endsAt = bidData0.endsAt;
-    await bid(bidData2, bidIncrease, 0);
+    await bid(bidData2, bidIncrease, 0).should.be.fulfilled;
   });
 
   it('If Bidder increases own bid, only the diff needed must be provided', async () => {
