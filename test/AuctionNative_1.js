@@ -284,7 +284,7 @@ contract('AuctionNative1', (accounts) => {
     assert.equal(info.state, AUCTIONING);
     assert.equal(info.buyer, bidData.bidder);
     assert.equal(info.seller, bidData.seller);
-    assert.equal(info.operator, operator);
+    assert.equal(info.universeId, bidData.universeId);
     assert.equal(info.feesCollector, feesCollector);
     assert.equal(Number(info.expirationTime) > 100, true);
     assert.equal(Number(info.feeBPS) > 1, true);

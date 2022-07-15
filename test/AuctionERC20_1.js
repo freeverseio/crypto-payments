@@ -328,7 +328,7 @@ contract('AuctionERC20_1', (accounts) => {
     assert.equal(info.state, AUCTIONING);
     assert.equal(info.buyer, bidData.bidder);
     assert.equal(info.seller, bidData.seller);
-    assert.equal(info.operator, operator);
+    assert.equal(info.universeId, bidData.universeId);
     assert.equal(info.feesCollector, feesCollector);
     assert.equal(Number(info.expirationTime) > 100, true);
     assert.equal(Number(info.feeBPS) > 1, true);
@@ -347,7 +347,7 @@ contract('AuctionERC20_1', (accounts) => {
     assert.equal(info.state, AUCTIONING);
     assert.equal(info.buyer, bidData.bidder);
     assert.equal(info.seller, bidData.seller);
-    assert.equal(info.operator, operator);
+    assert.equal(info.universeId, bidData.universeId);
     assert.equal(info.feesCollector, feesCollector);
     assert.equal(Number(info.expirationTime) > 100, true);
     assert.equal(Number(info.feeBPS) > 1, true);
@@ -427,6 +427,27 @@ contract('AuctionERC20_1', (accounts) => {
     );
     await timeTravel.waitUntil(endsAt + 30);
     await finalize(bidData.paymentId, true, operatorPrivKey).should.be.fulfilled;
+  });
+
+  it('finalize must be called by the latest available operator, not the one in the original payment', async () => {
+    // create bid with initial operator
+    const initialOperator = await payments.universeOperator(bidData.universeId);
+    assert.equal(initialOperator, operator);
+    await bid(bidData, initialBuyerERC20, initialBuyerETH);
+
+    // change operator:
+    await payments.setUniverseOperator(bidData.universeId, bidData.bidder);
+    assert.equal(await payments.universeOperator(bidData.universeId), bidData.bidder);
+
+    // should fail: try to finalize with initial operator
+    await timeTravel.waitUntil(endsAt + 30);
+    await truffleAssert.reverts(
+      finalize(bidData.paymentId, true, operatorPrivKey),
+      'only the operator can sign an assetTransferResult',
+    );
+
+    // should work: finalize with current operator
+    await finalize(bidData.paymentId, true, buyerPrivKey).should.be.fulfilled;
   });
 
   it('Test splitFundingSources with non-zero local balance', async () => {

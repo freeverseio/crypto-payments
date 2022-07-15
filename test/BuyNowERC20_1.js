@@ -166,7 +166,7 @@ contract('BuyNowERC20_1', (accounts) => {
     assert.equal(info.state, ASSET_TRANSFERRING);
     assert.equal(info.buyer, paymentData.buyer);
     assert.equal(info.seller, paymentData.seller);
-    assert.equal(info.operator, operator);
+    assert.equal(info.universeId, paymentData.universeId);
     assert.equal(info.feesCollector, feesCollector);
     assert.equal(Number(info.expirationTime) > 100, true);
     assert.equal(Number(info.feeBPS) > 1, true);
@@ -209,7 +209,7 @@ contract('BuyNowERC20_1', (accounts) => {
     assert.equal(info.state, ASSET_TRANSFERRING);
     assert.equal(info.buyer, paymentData.buyer);
     assert.equal(info.seller, paymentData.seller);
-    assert.equal(info.operator, operatorAccount.address);
+    assert.equal(info.universeId, paymentData.universeId);
     assert.equal(Number(info.expirationTime) > 100, true);
     assert.equal(Number(info.feeBPS) > 1, true);
     assert.equal(info.amount, paymentData.amount);
@@ -373,6 +373,26 @@ contract('BuyNowERC20_1', (accounts) => {
     assert.equal(Number(await payments.computeFeeAmount(100, 500)), 5);
     assert.equal(Number(await payments.computeFeeAmount(123456, 7)), 86);
     assert.equal(Number(await payments.computeFeeAmount('1234560000000000000000', 10)), 1234560000000000000);
+  });
+
+  it('finalize must be called by the latest available operator, not the one in the original payment', async () => {
+    // create BuyNow with initial operator
+    const initialOperator = await payments.universeOperator(paymentData.universeId);
+    assert.equal(initialOperator, operator);
+    await executeRelayedBuyNow(paymentData, initialBuyerERC20, initialBuyerETH, operator);
+
+    // change operator:
+    await payments.setUniverseOperator(paymentData.universeId, paymentData.buyer);
+    assert.equal(await payments.universeOperator(paymentData.universeId), paymentData.buyer);
+
+    // should fail: try to finalize with initial operator
+    await truffleAssert.reverts(
+      finalize(paymentData.paymentId, true, operatorPrivKey),
+      'only the operator can sign an assetTransferResult',
+    );
+
+    // should work: finalize with current operator
+    await finalize(paymentData.paymentId, true, buyerPrivKey).should.be.fulfilled;
   });
 
   it('Test splitFundingSources with no local balance', async () => {
