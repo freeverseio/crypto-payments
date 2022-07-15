@@ -116,7 +116,7 @@ abstract contract AuctionBase is IAuctionBase, BuyNowBase {
             uint256 expirationTime = bidInput.endsAt + _paymentWindow;
             require(
                 extendableUntil + _SAFETY_TRANSFER_WINDOW < expirationTime,
-                "cannot start auction that is extendable too close to expiration time"
+                "AuctionBase::_processBid: cannot start auction that is extendable too close to expiration time"
             );
             // 2.- store the part of the data common to Auctions and BuyNows;
             //     maxBidder and maxBid are stored in this struct, and updated on successive bids
@@ -213,7 +213,7 @@ abstract contract AuctionBase is IAuctionBase, BuyNowBase {
     ) private pure returns (AuctionConfig memory) {
         require(
             minIncreasePercentage > 0,
-            "minIncreasePercentage must be non-zero"
+            "AuctionBase::_createAuctionConfig: minIncreasePercentage must be non-zero"
         );
         return AuctionConfig(minIncreasePercentage, time2Extend, extendableBy);
     }
@@ -230,43 +230,52 @@ abstract contract AuctionBase is IAuctionBase, BuyNowBase {
         uint256 currentTime = block.timestamp;
 
         // requirements independent of current auction state:
-        require(currentTime <= bidInput.deadline, "payment deadline expired");
+        require(
+            currentTime <= bidInput.deadline,
+            "AuctionBase::assertBidInputsOK: payment deadline expired"
+        );
         if (_isSellerRegistrationRequired) {
             require(
                 _isRegisteredSeller[bidInput.seller],
-                "seller not registered"
+                "AuctionBase::assertBidInputsOK: seller not registered"
             );
         }
 
         // requirements that depend on current auction state:
         if (state == State.NotStarted) {
             // if auction does not exist yet, assert values are within obvious limits 
-            require(bidInput.endsAt >= currentTime, "endsAt cannot be in the past");
+            require(
+                bidInput.endsAt >= currentTime,
+                "AuctionBase::assertBidInputsOK: endsAt cannot be in the past"
+            );
             require(
                 bidInput.feeBPS <= 10000,
-                "fee cannot be larger than 100 percent"
+                "AuctionBase::assertBidInputsOK: fee cannot be larger than 100 percent"
             );
-            require(bidInput.bidAmount > 0, "bid amount cannot be 0");
+            require(
+                bidInput.bidAmount > 0,
+                "AuctionBase::assertBidInputsOK: bid amount cannot be 0"
+            );
         } else if (state == State.Auctioning) {
             // if auction exists already:
             // - check signed feeBPS is the same as in the ongoing bid
             require(
                 bidInput.feeBPS == _payments[bidInput.paymentId].feeBPS,
-                "fee does not match on-going auction fee"
+                "AuctionBase::assertBidInputsOK: fee does not match on-going auction fee"
             );
             // - check signed endsAt, even if not identical to starting bid
             //   (due to possible extensions on late bids), is still within extendableUntil
             require(
                 bidInput.endsAt <=
                     _auctions[bidInput.paymentId].extendableUntil,
-                "endsAt does not correspond to on-going auction data"
+                "AuctionBase::assertBidInputsOK: endsAt does not correspond to on-going auction data"
             );
             require(
                 bidInput.bidAmount >= minNewBidAmount(bidInput.paymentId),
-                "bid needs to be larger than previous bid by a certain percentage"
+                "AuctionBase::assertBidInputsOK: bid needs to be larger than previous bid by a certain percentage"
             );
         } else {
-            revert("bids are only accepted if state is either NOT_STARTED or AUCTIONING");
+            revert("AuctionBase::assertBidInputsOK: bids are only accepted if state is either NOT_STARTED or AUCTIONING");
         }
     }
 

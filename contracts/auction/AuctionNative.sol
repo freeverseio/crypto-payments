@@ -31,7 +31,7 @@ contract AuctionNative is IAuctionNative, AuctionBase, BuyNowNative {
     {
         require(
             msg.sender == bidInput.bidder,
-            "only bidder can execute this function"
+            "AuctionNative::bid: only bidder can execute this function"
         );
         address operator = universeOperator(bidInput.universeId);
         require(
@@ -40,14 +40,14 @@ contract AuctionNative is IAuctionNative, AuctionBase, BuyNowNative {
                 operatorSignature,
                 operator
             ),
-            "incorrect operator signature"
+            "AuctionNative::bid: incorrect operator signature"
         );
         // The following requirement avoids possible mistakes in building the TX's msg.value by a user.
         // While the funds provided can be less than the bid amount (in case of payer having local balance),
         // there is no reason for providing more funds than the bid amount.
         require(
             (msg.value <= bidInput.bidAmount),
-            "new funds provided must be less than bid amount"
+            "AuctionNative::bid: new funds provided must be less than bid amount"
         );
         _processBid(operator, bidInput);
     }

@@ -27,12 +27,12 @@ contract BuyNowERC20 is IBuyNowERC20, BuyNowBase {
     function buyNow(BuyNowInput calldata buyNowInp, bytes calldata operatorSignature) external {
         require(
             msg.sender == buyNowInp.buyer,
-            "only buyer can execute this function"
+            "BuyNowERC20::buyNow: only buyer can execute this function"
         );
         address operator = universeOperator(buyNowInp.universeId);
         require(
             IEIP712VerifierBuyNow(_eip712).verifyBuyNow(buyNowInp, operatorSignature, operator),
-            "incorrect operator signature"
+            "BuyNowERC20::buyNow: incorrect operator signature"
         );
         _processBuyNow(buyNowInp, operator);
     }
@@ -46,11 +46,11 @@ contract BuyNowERC20 is IBuyNowERC20, BuyNowBase {
         address operator = universeOperator(buyNowInp.universeId);
         require(
             IEIP712VerifierBuyNow(_eip712).verifyBuyNow(buyNowInp, operatorSignature, operator),
-            "incorrect operator signature"
+            "BuyNowERC20::relayedBuyNow: incorrect operator signature"
         );
         require(
             IEIP712VerifierBuyNow(_eip712).verifyBuyNow(buyNowInp, buyerSignature, buyNowInp.buyer),
-            "incorrect buyer signature"
+            "BuyNowERC20::relayedBuyNow: incorrect buyer signature"
         );
         _processBuyNow(buyNowInp, operator);
     }
@@ -78,7 +78,7 @@ contract BuyNowERC20 is IBuyNowERC20, BuyNowBase {
         if (newFundsNeeded > 0) {
             require(
                 IERC20(_erc20).transferFrom(payer, address(this), newFundsNeeded),
-                "ERC20 transfer failed"
+                "BuyNowERC20::_updatePayerBalanceOnPaymentReceived: ERC20 transfer failed"
             );
         }
         _balanceOf[payer] -= localFunds;

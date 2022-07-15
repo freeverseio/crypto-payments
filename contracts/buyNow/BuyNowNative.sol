@@ -21,19 +21,19 @@ contract BuyNowNative is IBuyNowNative, BuyNowBase {
     ) external payable {
         require(
             msg.sender == buyNowInp.buyer,
-            "only buyer can execute this function"
+            "BuyNowNative::buyNow: only buyer can execute this function"
         );
         address operator = universeOperator(buyNowInp.universeId);
         require(
             IEIP712VerifierBuyNow(_eip712).verifyBuyNow(buyNowInp, operatorSignature, operator),
-            "incorrect operator signature"
+            "BuyNowNative::buyNow: incorrect operator signature"
         );
         // The following requirement avoids possible mistakes in building the TX's msg.value.
         // While the funds provided can be less than the asset price (in case of payer having local balance),
         // there is no reason for providing more funds than the asset price.
         require(
             (msg.value <= buyNowInp.amount),
-            "new funds provided must be less than bid amount"
+            "BuyNowNative::buyNow: new funds provided must be less than bid amount"
         );
         _processBuyNow(buyNowInp, operator);
     }
@@ -58,7 +58,7 @@ contract BuyNowNative is IBuyNowNative, BuyNowBase {
     ) internal override {
         require(
             (msg.value >= newFundsNeeded),
-            "new funds provided are not within required range"
+            "BuyNowNative::_updatePayerBalanceOnPaymentReceived: new funds provided are not within required range"
         );
         // The next operation can never underflow due to the previous constraint,
         // and to the fact that splitFundingSources guarantees that _balanceOf[payer] >= localFunds
@@ -74,7 +74,7 @@ contract BuyNowNative is IBuyNowNative, BuyNowBase {
     */
     function _transfer(address to, uint256 amount) internal override {
         (bool success, ) = to.call{value: amount}("");
-        require(success, "Address: unable to send value, recipient may have reverted");
+        require(success, "BuyNowNative::_transfer: unable to send value, recipient may have reverted");
     }
 
     // VIEW FUNCTIONS

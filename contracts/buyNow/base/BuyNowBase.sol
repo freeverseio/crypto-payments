@@ -70,7 +70,7 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
     function setPaymentWindow(uint256 window) external onlyOwner {
         require(
             (window < 60 days) && (window > 3 hours),
-            "payment window outside limits"
+            "BuyNowBase::setPaymentWindow: payment window outside limits"
         );
         _paymentWindow = window;
         emit PaymentWindow(window);
@@ -90,7 +90,10 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
 
     /// @inheritdoc IBuyNowBase
     function registerAsSeller() external {
-        require(!_isRegisteredSeller[msg.sender], "seller already registered");
+        require(
+            !_isRegisteredSeller[msg.sender],
+            "BuyNowBase::registerAsSeller: seller already registered"
+        );
         _isRegisteredSeller[msg.sender] = true;
         emit NewSeller(msg.sender);
     }
@@ -119,7 +122,7 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
             : _payments[transferResult.paymentId].buyer;
         if (_onlyUserCanWithdraw[recipient]) require(
             msg.sender == recipient,
-            "tx sender not authorized to withdraw on recipients behalf"
+            "BuyNowBase::finalizeAndWithdraw: tx sender not authorized to withdraw on recipients behalf"
         );
         _finalize(transferResult, operatorSignature);
         // withdrawal cannot fail due to zero balance, since
@@ -137,7 +140,7 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
         address recipient = _payments[paymentId].buyer;
         if (_onlyUserCanWithdraw[recipient]) require(
             msg.sender == recipient,
-            "tx sender not authorized to withdraw on recipients behalf"
+            "BuyNowBase::refundAndWithdraw: tx sender not authorized to withdraw on recipients behalf"
         );
         _refund(paymentId);
         // withdrawal cannot fail due to zero balance, since
@@ -154,7 +157,7 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
     function relayedWithdraw(address recipient) external {
         require(
             !_onlyUserCanWithdraw[recipient],
-            "tx sender not authorized to withdraw on recipients behalf"
+            "BuyNowBase::relayedWithdraw: tx sender not authorized to withdraw on recipients behalf"
         );
         _withdrawAmount(recipient, _balanceOf[recipient], 0);
     }
@@ -162,7 +165,10 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
     /// @inheritdoc IBuyNowBase
     function withdrawAmount(uint256 amount) external {
         uint256 balance = _balanceOf[msg.sender];
-        require(balance >= amount, "not enough balance to withdraw specified amount");
+        require(
+            balance >= amount,
+            "BuyNowBase::withdrawAmount: not enough balance to withdraw specified amount"
+        );
         _withdrawAmount(msg.sender, amount, balance - amount);
     }
 
@@ -225,7 +231,7 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
     function _refund(bytes32 paymentId) private {
         require(
             acceptsRefunds(paymentId),
-            "payment does not accept refunds at this stage"
+            "BuyNowBase::_refund: payment does not accept refunds at this stage"
         );
         _refundToLocalBalance(paymentId);
     }
@@ -245,7 +251,7 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
         Payment memory payment = _payments[transferResult.paymentId];
         require(
             paymentState(transferResult.paymentId) == State.AssetTransferring,
-            "payment not initially in asset transferring state"
+            "BuyNowBase::_finalize: payment not initially in asset transferring state"
         );
         require(
             IEIP712VerifierBuyNow(_eip712).verifyAssetTransferResult(
@@ -253,7 +259,7 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
                 operatorSignature,
                 payment.operator
             ),
-            "only the operator can sign an assetTransferResult"
+            "BuyNowBase::_finalize: only the operator can sign an assetTransferResult"
         );
         if (transferResult.wasSuccessful) {
             _finalizeSuccess(transferResult.paymentId, payment);
@@ -319,7 +325,7 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
     */
     function _withdrawAmount(address recipient, uint256 amount, uint256 finalBalance) private {
         // requirement:
-        require(amount > 0, "cannot withdraw zero amount");
+        require(amount > 0, "BuyNowBase::_withdrawAmount: cannot withdraw zero amount");
         // effect:
         _balanceOf[recipient] = finalBalance;
         // interaction:
@@ -391,15 +397,27 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
 
     /// @inheritdoc IBuyNowBase
     function assertBuyNowInputsOK(BuyNowInput calldata buyNowInp) public view {
-        require(buyNowInp.amount > 0, "payment amount cannot be zero");
-        require(buyNowInp.feeBPS <= 10000, "fee cannot be larger than 100 percent");
+        require(
+            buyNowInp.amount > 0,
+            "BuyNowBase::assertBuyNowInputsOK: payment amount cannot be zero"
+        );
+        require(
+            buyNowInp.feeBPS <= 10000,
+            "BuyNowBase::assertBuyNowInputsOK: fee cannot be larger than 100 percent"
+        );
         require(
             paymentState(buyNowInp.paymentId) == State.NotStarted,
-            "payment in incorrect current state"
+            "BuyNowBase::assertBuyNowInputsOK: payment in incorrect current state"
         );
-        require(block.timestamp <= buyNowInp.deadline, "payment deadline expired");
+        require(
+            block.timestamp <= buyNowInp.deadline,
+            "BuyNowBase::assertBuyNowInputsOK: payment deadline expired"
+        );
         if (_isSellerRegistrationRequired)
-            require(_isRegisteredSeller[buyNowInp.seller], "seller not registered");
+            require(
+                _isRegisteredSeller[buyNowInp.seller],
+                "BuyNowBase::assertBuyNowInputsOK: seller not registered"
+            );
     }
 
     /// @inheritdoc IBuyNowBase
@@ -455,9 +473,12 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
         internal pure {
         require(
             (operator != payer) && (operator != seller),
-            "operator must be an observer"
+            "BuyNowBase::assertSeparateRoles: operator must be an observer"
         );
-        require((payer != seller), "payer and seller cannot coincide");
+        require(
+            (payer != seller),
+            "BuyNowBase::assertSeparateRoles: payer and seller cannot coincide"
+        );
     }
 
     /// @inheritdoc IBuyNowBase

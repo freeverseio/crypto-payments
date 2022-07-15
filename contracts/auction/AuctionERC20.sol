@@ -44,7 +44,7 @@ contract AuctionERC20 is IAuctionERC20, AuctionBase, BuyNowERC20 {
     function bid(BidInput calldata bidInput, bytes calldata operatorSignature) external {
         require(
             msg.sender == bidInput.bidder,
-            "only bidder can execute this function"
+            "AuctionERC20::bid: only bidder can execute this function"
         );
         address operator = universeOperator(bidInput.universeId);
         require(
@@ -53,7 +53,7 @@ contract AuctionERC20 is IAuctionERC20, AuctionBase, BuyNowERC20 {
                 operatorSignature,
                 operator
             ),
-            "incorrect operator signature"
+            "AuctionERC20::bid: incorrect operator signature"
         );
         _processBid(operator, bidInput);
     }
@@ -71,7 +71,7 @@ contract AuctionERC20 is IAuctionERC20, AuctionBase, BuyNowERC20 {
                 operatorSignature,
                 operator
             ),
-            "incorrect operator signature"
+            "AuctionERC20::relayedBid: incorrect operator signature"
         );
         require(
             IEIP712VerifierAuction(_eip712).verifyBid(
@@ -79,7 +79,7 @@ contract AuctionERC20 is IAuctionERC20, AuctionBase, BuyNowERC20 {
                 bidderSignature,
                 bidInput.bidder
             ),
-            "incorrect bidder signature"
+            "AuctionERC20::relayedBid: incorrect bidder signature"
         );
         _processBid(operator, bidInput);
     }
