@@ -106,7 +106,7 @@ abstract contract AuctionBase is IAuctionBase, BuyNowBase {
         State state = assertBidInputsOK(bidInput);
         assertSeparateRoles(operator, bidInput.bidder, bidInput.seller);
         (uint256 newFundsNeeded, uint256 localFunds, bool isSameBidder) = splitAuctionFundingSources(bidInput);
-        _updatePayerBalanceOnPaymentReceived(bidInput.bidder, newFundsNeeded, localFunds);
+        _updateBuyerBalanceOnPaymentReceived(bidInput.bidder, newFundsNeeded, localFunds);
 
         if (state == State.NotStarted) {
             // If 1st bid for auction => new auction is to be created:

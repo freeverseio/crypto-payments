@@ -544,7 +544,7 @@ contract('AuctionERC20_1', (accounts) => {
     // Bid fails
     await truffleAssert.reverts(
       bid(bidData2, initialBuyerERC20, initialBuyerETH),
-      'payer and seller cannot coincide',
+      'buyer and seller cannot coincide',
     );
   });
 });

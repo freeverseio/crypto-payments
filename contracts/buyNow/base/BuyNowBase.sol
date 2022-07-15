@@ -175,17 +175,17 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
     // PRIVATE & INTERNAL FUNCTIONS
 
     /**
-     * @dev Interface to method that must update payer's local balance on arrival of a payment,
+     * @dev Interface to method that must update buyer's local balance on arrival of a payment,
      *  re-using local balance if available. In ERC20 payments, it transfers to this contract
      *  the required amount; in case of native crypto, it must add excess of provided funds, if any, to local balance.
-     * @param payer The address of the payer
-     * @param newFundsNeeded The elsewhere computed minimum amount of funds required to be provided by the payer,
+     * @param buyer The address of the buyer
+     * @param newFundsNeeded The elsewhere computed minimum amount of funds required to be provided by the buyer,
      *  having possible re-use of local funds into account
-     * @param localFunds The elsewhere computed amount of funds available to the payer in this contract, that will be
+     * @param localFunds The elsewhere computed amount of funds available to the buyer in this contract, that will be
      *  re-used in the payment
      */
-    function _updatePayerBalanceOnPaymentReceived(
-        address payer,
+    function _updateBuyerBalanceOnPaymentReceived(
+        address buyer,
         uint256 newFundsNeeded,
         uint256 localFunds
     ) internal virtual;
@@ -208,7 +208,7 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
             buyNowInp.buyer,
             buyNowInp.amount
         );
-        _updatePayerBalanceOnPaymentReceived(buyNowInp.buyer, newFundsNeeded, localFunds);
+        _updateBuyerBalanceOnPaymentReceived(buyNowInp.buyer, newFundsNeeded, localFunds);
         _payments[buyNowInp.paymentId] = Payment(
             State.AssetTransferring,
             buyNowInp.buyer,
@@ -462,22 +462,22 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
     // PURE FUNCTIONS
 
     /**
-     * @dev Reverts if either of the following addresses coincide: operator, payer, seller
+     * @dev Reverts if either of the following addresses coincide: operator, buyer, seller
      *  On the one hand, the operator must be an observer.
      *  On the other hand, the seller cannot act on his/her already owned assets.
      * @param operator The address of the operator
-     * @param payer The address of the payer
+     * @param buyer The address of the buyer
      * @param seller The address of the seller
     */
-    function assertSeparateRoles(address operator, address payer, address seller)
+    function assertSeparateRoles(address operator, address buyer, address seller)
         internal pure {
         require(
-            (operator != payer) && (operator != seller),
+            (operator != buyer) && (operator != seller),
             "BuyNowBase::assertSeparateRoles: operator must be an observer"
         );
         require(
-            (payer != seller),
-            "BuyNowBase::assertSeparateRoles: payer and seller cannot coincide"
+            (buyer != seller),
+            "BuyNowBase::assertSeparateRoles: buyer and seller cannot coincide"
         );
     }
 

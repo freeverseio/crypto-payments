@@ -132,7 +132,7 @@
 <text text-anchor="start" x="661" y="-581.7" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;_erc20: address</text>
 <polyline fill="none" stroke="#000000" points="653,-573.5 1288.3236,-573.5 "/>
 <text text-anchor="start" x="661" y="-556.9" font-family="Times,serif" font-size="14.00" fill="#000000">Internal:</text>
-<text text-anchor="start" x="661" y="-540.1" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;_updatePayerBalanceOnPaymentReceived(payer: address, newFundsNeeded: uint256, localFunds: uint256)</text>
+<text text-anchor="start" x="661" y="-540.1" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;_updateBuyerBalanceOnPaymentReceived(buyer: address, newFundsNeeded: uint256, localFunds: uint256)</text>
 <text text-anchor="start" x="661" y="-523.3" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;_transfer(to: address, amount: uint256)</text>
 <text text-anchor="start" x="661" y="-506.5" font-family="Times,serif" font-size="14.00" fill="#000000">External:</text>
 <text text-anchor="start" x="661" y="-489.7" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;buyNow(buyNowInp: BuyNowInput, operatorSignature: bytes)</text>
@@ -203,7 +203,7 @@
 <text text-anchor="middle" x="317.6618" y="-556.5" font-family="Times,serif" font-size="14.00" fill="#000000"> </text>
 <polyline fill="none" stroke="#000000" points="0,-548.3 635.3236,-548.3 "/>
 <text text-anchor="start" x="8" y="-531.7" font-family="Times,serif" font-size="14.00" fill="#000000">Internal:</text>
-<text text-anchor="start" x="8" y="-514.9" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;_updatePayerBalanceOnPaymentReceived(payer: address, newFundsNeeded: uint256, localFunds: uint256)</text>
+<text text-anchor="start" x="8" y="-514.9" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;_updateBuyerBalanceOnPaymentReceived(buyer: address, newFundsNeeded: uint256, localFunds: uint256)</text>
 <text text-anchor="start" x="8" y="-498.1" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;_transfer(to: address, amount: uint256)</text>
 <text text-anchor="start" x="8" y="-481.3" font-family="Times,serif" font-size="14.00" fill="#000000">External:</text>
 <text text-anchor="start" x="8" y="-464.5" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;&lt;&lt;payable&gt;&gt; buyNow(buyNowInp: BuyNowInput, operatorSignature: bytes)</text>
@@ -305,10 +305,10 @@
 <text text-anchor="start" x="1195.6957" y="-1474.7" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;_withdraw()</text>
 <text text-anchor="start" x="1195.6957" y="-1457.9" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;_withdrawAmount(recipient: address, amount: uint256, finalBalance: uint256)</text>
 <text text-anchor="start" x="1195.6957" y="-1441.1" font-family="Times,serif" font-size="14.00" fill="#000000">Internal:</text>
-<text text-anchor="start" x="1195.6957" y="-1424.3" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;&lt;&lt;abstract&gt;&gt; _updatePayerBalanceOnPaymentReceived(payer: address, newFundsNeeded: uint256, localFunds: uint256)</text>
+<text text-anchor="start" x="1195.6957" y="-1424.3" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;&lt;&lt;abstract&gt;&gt; _updateBuyerBalanceOnPaymentReceived(buyer: address, newFundsNeeded: uint256, localFunds: uint256)</text>
 <text text-anchor="start" x="1195.6957" y="-1407.5" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;&lt;&lt;abstract&gt;&gt; _transfer(to: address, amount: uint256)</text>
 <text text-anchor="start" x="1195.6957" y="-1390.7" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;_processBuyNow(buyNowInp: BuyNowInput, operator: address)</text>
-<text text-anchor="start" x="1195.6957" y="-1373.9" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;assertSeparateRoles(operator: address, payer: address, seller: address)</text>
+<text text-anchor="start" x="1195.6957" y="-1373.9" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;assertSeparateRoles(operator: address, buyer: address, seller: address)</text>
 <text text-anchor="start" x="1195.6957" y="-1357.1" font-family="Times,serif" font-size="14.00" fill="#000000">External:</text>
 <text text-anchor="start" x="1195.6957" y="-1340.3" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;setEIP712(eip712address: address)</text>
 <text text-anchor="start" x="1195.6957" y="-1323.5" font-family="Times,serif" font-size="14.00" fill="#000000"> &#160;&#160;&#160;setPaymentWindow(window: uint256)</text>
