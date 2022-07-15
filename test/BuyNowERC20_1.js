@@ -509,7 +509,7 @@ contract('BuyNowERC20_1', (accounts) => {
     // Fails on a directPay:
     await truffleAssert.reverts(
       executeDirectBuyNow(paymentData2, initialBuyerERC20, initialBuyerETH),
-      'payer and seller cannot coincide',
+      'buyer and seller cannot coincide',
     );
 
     // Fails on a relayedPay:
@@ -517,7 +517,7 @@ contract('BuyNowERC20_1', (accounts) => {
     const sigOperator = await signEIP712(operatorPrivKey, prepareDataToSignBuyNow, paymentData2, true);
     await truffleAssert.reverts(
       payments.relayedBuyNow(paymentData2, sigBuyer, sigOperator, { from: bob }),
-      'payer and seller cannot coincide',
+      'buyer and seller cannot coincide',
     );
   });
 });

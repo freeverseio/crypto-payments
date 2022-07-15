@@ -58,30 +58,30 @@ contract BuyNowERC20 is IBuyNowERC20, BuyNowBase {
     // PRIVATE & INTERNAL FUNCTIONS
 
     /**
-     * @dev Method that updates payer's local balance on arrival of a payment,
+     * @dev Method that updates buyer's local balance on arrival of a payment,
      *  re-using local balance if available, and transferring to this contract
      *  only the new funds required. Unlike in native crypto payments, here the exact minimal amount
      *  required is automatically transferred by this contract from the ERC20 contract, not depending on the
      *  amount provided by users as msg.value. There is therefore no need to account for any excess
      *  of provided funds.
-     * @param payer The address executing the payment
-     * @param newFundsNeeded The elsewhere computed minimum amount of funds required to be provided by the payer,
+     * @param buyer The address executing the payment
+     * @param newFundsNeeded The elsewhere computed minimum amount of funds required to be provided by the buyer,
      *  having possible re-use of local funds into account
-     * @param localFunds The elsewhere computed amount of funds available to the payer in this contract that will be
+     * @param localFunds The elsewhere computed amount of funds available to the buyer in this contract that will be
      *  re-used in the payment
      */
-    function _updatePayerBalanceOnPaymentReceived(
-        address payer,
+    function _updateBuyerBalanceOnPaymentReceived(
+        address buyer,
         uint256 newFundsNeeded,
         uint256 localFunds
     ) internal override {
         if (newFundsNeeded > 0) {
             require(
-                IERC20(_erc20).transferFrom(payer, address(this), newFundsNeeded),
-                "BuyNowERC20::_updatePayerBalanceOnPaymentReceived: ERC20 transfer failed"
+                IERC20(_erc20).transferFrom(buyer, address(this), newFundsNeeded),
+                "BuyNowERC20::_updateBuyerBalanceOnPaymentReceived: ERC20 transfer failed"
             );
         }
-        _balanceOf[payer] -= localFunds;
+        _balanceOf[buyer] -= localFunds;
     }
 
     /**
