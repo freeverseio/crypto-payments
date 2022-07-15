@@ -29,7 +29,7 @@ contract BuyNowNative is IBuyNowNative, BuyNowBase {
             "incorrect operator signature"
         );
         // The following requirement avoids possible mistakes in building the TX's msg.value.
-        // While the funds provided can by less than the asset price (in case of payer having local balance),
+        // While the funds provided can be less than the asset price (in case of payer having local balance),
         // there is no reason for providing more funds than the asset price.
         require(
             (msg.value <= buyNowInp.amount),

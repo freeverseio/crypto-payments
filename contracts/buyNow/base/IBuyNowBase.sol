@@ -206,7 +206,7 @@ interface IBuyNowBase is ISignableStructsBuyNow {
      *  updates balances of seller or buyer, respectively, and proceeds to withdraw all funds 
      *  in this contract available to the rightful recipient of the paymentId: 
      *  the seller if transferResult.wasSuccessful == true, the buyer otherwise.
-     * @dev If recipient has set onlyUserCanWithdraw == true, then msg.sender must the the recipient;
+     * @dev If recipient has set onlyUserCanWithdraw == true, then msg.sender must the recipient;
      *  otherwise, anyone can execute this method, with funds arriving to the recipient too, but with a
      *  helping 3rd party covering gas costs and TX sending hassle.
      *  The operator signature must be included as input param.
@@ -231,7 +231,7 @@ interface IBuyNowBase is ISignableStructsBuyNow {
 
     /**
      * @notice Executes refund and withdraw to the buyer in one transaction.
-     * @dev If the buyer has set onlyUserCanWithdraw == true, then msg.sender must the the recipient;
+     * @dev If the buyer has set onlyUserCanWithdraw == true, then msg.sender must the recipient;
      *  otherwise, anyone can execute this method, with funds arriving to the buyer too, but with a
      *  helping 3rd party covering gas costs and TX sending hassle.
      *  Requires acceptsRefunds == true to proceed.

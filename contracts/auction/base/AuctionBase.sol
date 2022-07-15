@@ -170,7 +170,7 @@ abstract contract AuctionBase is IAuctionBase, BuyNowBase {
 
     /**
      * @notice Increments the ending time of an auction on arrival of a 'late bid' during the
-     *  time window [curretEndsAt - timeToExtend, curretEndsAt], by an amount equal to timeToExtend,
+     *  time window [currentEndsAt - timeToExtend, currentEndsAt], by an amount equal to timeToExtend,
      *  never exceeding the extendableUntil value stored during the creation of that auction.
      * @param bidInput The struct containing all bid data
      * @return endsAt On late bid: the incremented ending time of the auction;

@@ -19,7 +19,7 @@ interface IBuyNowERC20 is IBuyNowBase {
      * @notice Starts Payment process by the buyer.
      * @dev Executed by the buyer, who relays the operator's signature.
      *  This method will transfer only the minimum required amount from the bidder
-     *  to this contract, re-using any exisiting local balance.
+     *  to this contract, re-using any existing local balance.
      *  If all requirements are fulfilled, it stores the data relevant
      *  for the next steps of the payment, and it locks the funds
      *  in this contract.

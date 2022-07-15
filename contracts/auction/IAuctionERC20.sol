@@ -37,7 +37,7 @@ interface IAuctionERC20 is ISignableStructsAuction {
      *   or updates an existing one.
      * @dev Executed by the bidder, who relays the operator's signature.
      *  This method will transfer only the minimum required amount from the bidder
-     *  to this contract, taking into account any exisiting local balance,
+     *  to this contract, taking into account any existing local balance,
      *  and the case where the same bidder raises his/her previous max bid,
      *  in which case only the difference between bids is required.
      *  If all requirements are fulfilled, it stores the data relevant for the next steps
@@ -54,7 +54,7 @@ interface IAuctionERC20 is ISignableStructsAuction {
      *   or updates an existing one.
      * @dev Executed by the anyone, who must relay both the operator and the bidder signatures.
      *  This method will transfer only the minimum required amount from the bidder
-     *  to this contract, taking into account any exisiting local balance,
+     *  to this contract, taking into account any existing local balance,
      *  and the case where the same bidder raises his/her previous max bid,
      *  in which case only the difference between bids is required.
      *  If all requirements are fulfilled, it stores the data relevant for the next steps
