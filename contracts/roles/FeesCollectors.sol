@@ -21,15 +21,21 @@ contract FeesCollectors is Ownable {
     /**
      * @dev Event emitted on change of default feesCollector
      * @param feesCollector The address of the new default feesCollector
+     * @param prevFeesCollector The previous value of feesCollector
      */
-    event DefaultFeesCollector(address indexed feesCollector);
+    event DefaultFeesCollector(address indexed feesCollector, address indexed prevFeesCollector);
 
     /**
      * @dev Event emitted on change of a specific universe feesCollector
      * @param universeId The id of the universe
      * @param feesCollector The address of the new universe feesCollector
+     * @param prevFeesCollector The previous value of feesCollector
      */
-    event UniverseFeesCollector(uint256 indexed universeId, address indexed feesCollector);
+    event UniverseFeesCollector(
+        uint256 indexed universeId,
+        address indexed feesCollector,
+        address indexed prevFeesCollector
+    );
 
     /// @dev The address of the default feesCollector:
     address private _defaultFeesCollector;
@@ -38,17 +44,16 @@ contract FeesCollectors is Ownable {
     mapping(uint256 => address) private _universeFeesCollectors;
 
     constructor() {
-        _defaultFeesCollector = msg.sender;
-        emit DefaultFeesCollector(msg.sender);
+        setDefaultFeesCollector(msg.sender);
     }
 
     /**
      * @dev Sets a new default feesCollector
      * @param feesCollector The address of the new default feesCollector
      */
-    function setDefaultFeesCollector(address feesCollector) external onlyOwner {
+    function setDefaultFeesCollector(address feesCollector) public onlyOwner {
+        emit DefaultFeesCollector(feesCollector, _defaultFeesCollector);
         _defaultFeesCollector = feesCollector;
-        emit DefaultFeesCollector(feesCollector);
     }
 
     /**
@@ -60,8 +65,8 @@ contract FeesCollectors is Ownable {
         external
         onlyOwner
     {
+        emit UniverseFeesCollector(universeId, feesCollector, universeFeesCollector(universeId));
         _universeFeesCollectors[universeId] = feesCollector;
-        emit UniverseFeesCollector(universeId, feesCollector);
     }
 
     /**
@@ -73,8 +78,8 @@ contract FeesCollectors is Ownable {
         external
         onlyOwner
     {
+        emit UniverseFeesCollector(universeId, _defaultFeesCollector, _universeFeesCollectors[universeId]);
         delete _universeFeesCollectors[universeId];
-        emit UniverseFeesCollector(universeId, _defaultFeesCollector);
     }
 
     /**
