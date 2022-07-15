@@ -457,7 +457,7 @@ contract('AuctionERC20_1', (accounts) => {
     bidData2.feeBPS = 10001;
     await truffleAssert.reverts(
       bid(bidData2, initialBuyerERC20, initialBuyerETH),
-      'fee cannot be larger than 100 percent',
+      'fee cannot be larger than maxFeeBPS',
     );
   });
 

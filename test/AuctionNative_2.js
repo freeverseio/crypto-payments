@@ -940,7 +940,7 @@ contract('AuctionNative2', (accounts) => {
     wrongPaymentData2.feeBPS = 10100;
     await truffleAssert.fails(
       bid(wrongPaymentData2, 0),
-      'fee cannot be larger than 100 percent',
+      'fee cannot be larger than maxFeeBPS',
     );
 
     // fails due to insufficient funds:

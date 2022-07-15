@@ -313,6 +313,36 @@ contract('BuyNowERC20_1', (accounts) => {
     await payments.setPaymentWindow(60 * oneDay - 1, { from: deployer }).should.be.fulfilled;
   });
 
+  it('Set maxFeeBPS works if within limits', async () => {
+    const newVal = 6000;
+    await truffleAssert.reverts(
+      payments.setMaxFeeBPS(newVal, { from: alice }),
+      'caller is not the owner',
+    );
+    await payments.setMaxFeeBPS(newVal, { from: deployer }).should.be.fulfilled;
+    assert.equal(Number(await payments.maxFeeBPS()), newVal);
+
+    // check event
+    const past = await payments.getPastEvents('MaxFeeBPS', { fromBlock: 0, toBlock: 'latest' }).should.be.fulfilled;
+    assert.equal(past[0].args.maxFeeBPS, newVal);
+  });
+
+  it('Set maxFeeBPS fails if below limit', async () => {
+    await truffleAssert.fails(
+      payments.setMaxFeeBPS(-2, { from: deployer }),
+      'value out-of-bounds',
+    );
+    await payments.setMaxFeeBPS(1, { from: deployer }).should.be.fulfilled;
+  });
+
+  it('Set maxFeeBPS fails if above limit', async () => {
+    await truffleAssert.reverts(
+      payments.setMaxFeeBPS(10001, { from: deployer }),
+      'maxFeeBPS outside limits',
+    );
+    await payments.setMaxFeeBPS(10000, { from: deployer }).should.be.fulfilled;
+  });
+
   it('Test fee computation', async () => {
     assert.equal(Number(await payments.computeFeeAmount(9, 500)), 0);
     assert.equal(Number(await payments.computeFeeAmount(99, 100)), 0);
@@ -371,7 +401,7 @@ contract('BuyNowERC20_1', (accounts) => {
     paymentData2.feeBPS = 10001;
     await truffleAssert.reverts(
       executeRelayedBuyNow(paymentData2, initialBuyerERC20, initialBuyerETH, operator),
-      'fee cannot be larger than 100 percent',
+      'fee cannot be larger than maxFeeBPS',
     );
   });
 

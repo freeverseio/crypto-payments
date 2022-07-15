@@ -782,7 +782,7 @@ contract('BuyNowERC20_2', (accounts) => {
     wrongPaymentData2.feeBPS = 10100;
     await truffleAssert.reverts(
       relayedBuyNow(wrongPaymentData2, initialBuyerERC20, initialBuyerETH, operator),
-      'fee cannot be larger than 100 percent',
+      'fee cannot be larger than maxFeeBPS',
     );
 
     // fails unless correctly signed by buyer
@@ -856,7 +856,7 @@ contract('BuyNowERC20_2', (accounts) => {
     wrongPaymentData2.feeBPS = 10100;
     await truffleAssert.reverts(
       buyNow(wrongPaymentData2, initialBuyerERC20, initialBuyerETH),
-      'fee cannot be larger than 100 percent',
+      'fee cannot be larger than maxFeeBPS',
     );
 
     // fails unless the operator signature is provided

@@ -376,7 +376,7 @@ contract('AuctionNative1', (accounts) => {
     bidData2.feeBPS = 10001;
     await truffleAssert.reverts(
       bid(bidData2, initialBuyerETH),
-      'fee cannot be larger than 100 percent',
+      'fee cannot be larger than maxFeeBPS',
     );
   });
 

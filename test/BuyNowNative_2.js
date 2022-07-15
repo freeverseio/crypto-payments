@@ -1070,7 +1070,7 @@ contract('BuyNowNative2', (accounts) => {
 
     await truffleAssert.fails(
       buyNow(wrongPaymentData2, 0),
-      'fee cannot be larger than 100 percent',
+      'fee cannot be larger than maxFeeBPS',
     );
 
     // it finally is accepted

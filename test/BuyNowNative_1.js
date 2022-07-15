@@ -314,7 +314,7 @@ contract('BuyNowNative1', (accounts) => {
     paymentData2.feeBPS = 10001;
     await truffleAssert.reverts(
       buyNow(paymentData2, initialBuyerETH),
-      'fee cannot be larger than 100 percent',
+      'fee cannot be larger than maxFeeBPS',
     );
   });
 
@@ -332,7 +332,7 @@ contract('BuyNowNative1', (accounts) => {
     paymentData2.feeBPS = 10022;
     await truffleAssert.reverts(
       buyNow(paymentData2, initialBuyerETH),
-      'fee cannot be larger than 100 percent',
+      'fee cannot be larger than maxFeeBPS',
     );
   });
 
