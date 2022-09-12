@@ -1,3 +1,4 @@
+/* eslint-disable no-underscore-dangle */
 /* eslint-disable no-await-in-loop */
 /* eslint-disable no-undef */
 
@@ -6,7 +7,7 @@ const truffleAssert = require('truffle-assertions');
 const ethSigUtil = require('eth-sig-util');
 const { prepareDataToSignBid, prepareDataToSignAssetTransfer } = require('../helpers/signer');
 const {
-  fromHexString, toBN, provideFunds, registerAccountInLocalTestnet, getGasFee, assertBalances,
+  fromHexString, toBN, provideFunds, registerAccountInLocalTestnet, getGasFee, assertBalances, addressFromPk, generateSellerSig,
 } = require('../helpers/utils');
 const { TimeTravel } = require('../helpers/TimeTravel');
 
@@ -24,12 +25,15 @@ contract('AuctionNative3', (accounts) => {
   const defaultMinPercent = 500; // 5%
   const defaultTimeToExtend = 10 * 60; // 10 min
   const defaultExtendableBy = 24 * 3600; // 1 day
-  const [deployer, alice] = accounts;
+  const [deployer] = accounts;
   const feesCollector = deployer;
+  const sellerPrivKey = '0x4f3edf983ac636a65a842ce7c78d9aa706d3b113bce9c46f30d7d21715b23b1d';
   const buyerPrivKey = '0x3B878F7892FBBFA30C8AED1DF317C19B853685E707C2CF0EE1927DC516060A54';
   const operatorPrivKey = '0x4A878F7892FBBFA30C8AED1DF317C19B853685E707C2CF0EE1927DC516060A54';
+  const sellerAccount = web3.eth.accounts.privateKeyToAccount(sellerPrivKey);
   const buyerAccount = web3.eth.accounts.privateKeyToAccount(buyerPrivKey);
   const operatorAccount = web3.eth.accounts.privateKeyToAccount(operatorPrivKey);
+  const alice = sellerAccount.address;
   const operator = operatorAccount.address;
   const defaultAmount = 300;
   const defaultFeeBPS = 500; // 5%
@@ -52,6 +56,7 @@ contract('AuctionNative3', (accounts) => {
   const initialBuyerETH = 1000000000000000000;
   const initialOperatorETH = 6000000000000000000;
   const timeTravel = new TimeTravel(web3);
+  const minimalSupply = Math.round(Number(initialBuyerETH) / 10);
 
   let eip712;
   let payments;
@@ -67,9 +72,11 @@ contract('AuctionNative3', (accounts) => {
       defaultTimeToExtend,
       defaultExtendableBy,
     ).should.be.fulfilled;
+    await registerAccountInLocalTestnet(sellerAccount).should.be.fulfilled;
     await registerAccountInLocalTestnet(buyerAccount).should.be.fulfilled;
     await registerAccountInLocalTestnet(operatorAccount).should.be.fulfilled;
     await provideFunds(deployer, operator, initialOperatorETH);
+    await provideFunds(deployer, bidData.seller, minimalSupply);
     await payments.setUniverseOperator(
       bidData.universeId,
       operator,
@@ -104,7 +111,7 @@ contract('AuctionNative3', (accounts) => {
   // otherwise it provides _bidData.bidAmount;
   // this is useful when the user already have funds in the contract
   // and just needs an amount less than bidAmount to be provided.
-  async function bid(_bidData, _ETHSupplyForBuyer, _txAmount) {
+  async function bid(_sellerPrivKey, _bidData, _ETHSupplyForBuyer, _txAmount) {
     await provideFunds(deployer, _bidData.bidder, _ETHSupplyForBuyer);
 
     // Operator signs purchase
@@ -116,10 +123,11 @@ contract('AuctionNative3', (accounts) => {
         contractAddress: eip712.address,
       }),
     );
+    const sigSeller = generateSellerSig(_sellerPrivKey, _bidData.paymentId);
 
     // Pay
     const value = _txAmount >= 0 ? _txAmount : _bidData.bidAmount;
-    await payments.bid(_bidData, signature, { from: _bidData.bidder, value });
+    await payments.bid(_bidData, signature, sigSeller, { from: _bidData.bidder, value });
     return signature;
   }
 
@@ -129,13 +137,24 @@ contract('AuctionNative3', (accounts) => {
     const bidData2 = JSON.parse(JSON.stringify(bidData));
     bidData2.endsAt = 0;
     await truffleAssert.reverts(
-      bid(bidData2, initialBuyerETH),
+      bid(sellerPrivKey, bidData2, initialBuyerETH),
       'endsAt cannot be in the past.',
     );
   });
 
+  it('endsAt cannot be too large', async () => {
+    const maxAuctionDuration = Number(await payments._MAX_AUCTION_DURATION());
+    const bidData2 = JSON.parse(JSON.stringify(bidData));
+    const now2 = Math.floor(Date.now() / 1000);
+    bidData2.endsAt = now2 + maxAuctionDuration + 300;
+    await truffleAssert.reverts(
+      bid(sellerPrivKey, bidData2, initialBuyerETH),
+      'endsAt exceeds maximum allowed',
+    );
+  });
+
   it('AUCTIONING moves to ASSET TRANSFERRING after endsAt', async () => {
-    await bid(bidData, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, initialBuyerETH);
     assert.equal(await payments.paymentState(bidData.paymentId), AUCTIONING);
     await timeTravel.waitUntil(endsAt - 10);
     assert.equal(await payments.paymentState(bidData.paymentId), AUCTIONING);
@@ -150,11 +169,11 @@ contract('AuctionNative3', (accounts) => {
     bidData0.deadline = endsAt * 10;
 
     // make two bids
-    await bid(bidData0, initialBuyerETH);
+    await bid(sellerPrivKey, bidData0, initialBuyerETH);
 
     const bidIncrease = 200;
     bidData0.bidAmount += bidIncrease;
-    await bid(bidData0, 0, bidIncrease);
+    await bid(sellerPrivKey, bidData0, 0, bidIncrease);
 
     // check that the change of state happens at the original endsAt
 
@@ -172,7 +191,7 @@ contract('AuctionNative3', (accounts) => {
     bidData0.deadline = endsAt * 10;
 
     // make an initial bid
-    await bid(bidData0, initialBuyerETH);
+    await bid(sellerPrivKey, bidData0, initialBuyerETH);
     assert.equal(await payments.paymentState(bidData.paymentId), AUCTIONING);
 
     // for each bid:
@@ -184,38 +203,12 @@ contract('AuctionNative3', (accounts) => {
       await timeTravel.waitUntil(beforeEndsAt);
       const bidIncrease = Math.floor(0.06 * bidData0.bidAmount);
       bidData0.bidAmount += bidIncrease;
-      await bid(bidData0, 0, bidIncrease);
+      await bid(sellerPrivKey, bidData0, 0, bidIncrease);
       assert.equal(await payments.paymentState(bidData.paymentId), AUCTIONING);
       beforeEndsAt += defaultTimeToExtend;
     }
 
     await timeTravel.waitUntil(beforeEndsAt + 100);
     assert.equal(await payments.paymentState(bidData.paymentId), ASSET_TRANSFERRING);
-  });
-
-  it('Auctions can not be created such that extendableUntil is too close to expirationTime', async () => {
-    // This test shows that auctions need to be created unless enough time is left
-    // for the asset transfer stage before the expiration time.
-    // Note that:
-    // - extendableUntil = endsAt + extendableBy
-    // - expirationTime  = endsAt + paymentWindow;
-    const paymentWindow = Number(await payments.paymentWindow());
-    let extendableBy = paymentWindow - 3600 * 1;
-    await payments.setDefaultAuctionConfig(1, 1, extendableBy);
-    await truffleAssert.reverts(
-      bid(bidData, initialBuyerETH),
-      'cannot start auction that is extendable too close to expiration time',
-    );
-
-    extendableBy = paymentWindow - 3600 * 2 + 1;
-    await payments.setDefaultAuctionConfig(1, 1, extendableBy);
-    await truffleAssert.reverts(
-      bid(bidData, initialBuyerETH),
-      'cannot start auction that is extendable too close to expiration time',
-    );
-
-    extendableBy = paymentWindow - 3600 * 2 - 1;
-    await payments.setDefaultAuctionConfig(1, 1, extendableBy);
-    await bid(bidData, initialBuyerETH).should.be.fulfilled;
   });
 });

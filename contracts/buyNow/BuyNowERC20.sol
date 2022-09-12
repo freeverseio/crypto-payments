@@ -3,6 +3,7 @@ pragma solidity =0.8.14;
 
 import "./IBuyNowERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "./IERC20Detailed.sol";
 import "./base/BuyNowBase.sol";
 
 /**
@@ -24,64 +25,69 @@ contract BuyNowERC20 is IBuyNowERC20, BuyNowBase {
     }
 
     /// @inheritdoc IBuyNowERC20
-    function buyNow(BuyNowInput calldata buyNowInp, bytes calldata operatorSignature) external {
+    function buyNow(
+        BuyNowInput calldata buyNowInp,
+        bytes calldata operatorSignature,
+        bytes calldata sellerSignature
+    ) external {
         require(
             msg.sender == buyNowInp.buyer,
-            "only buyer can execute this function"
+            "BuyNowERC20::buyNow: only buyer can execute this function"
         );
         address operator = universeOperator(buyNowInp.universeId);
         require(
             IEIP712VerifierBuyNow(_eip712).verifyBuyNow(buyNowInp, operatorSignature, operator),
-            "incorrect operator signature"
+            "BuyNowERC20::buyNow: incorrect operator signature"
         );
-        _processBuyNow(buyNowInp, operator);
+        _processBuyNow(buyNowInp, operator, sellerSignature);
     }
 
     /// @inheritdoc IBuyNowERC20
     function relayedBuyNow(
         BuyNowInput calldata buyNowInp,
         bytes calldata buyerSignature,
-        bytes calldata operatorSignature
+        bytes calldata operatorSignature,
+        bytes calldata sellerSignature
     ) external {
         address operator = universeOperator(buyNowInp.universeId);
         require(
             IEIP712VerifierBuyNow(_eip712).verifyBuyNow(buyNowInp, operatorSignature, operator),
-            "incorrect operator signature"
+            "BuyNowERC20::relayedBuyNow: incorrect operator signature"
         );
         require(
             IEIP712VerifierBuyNow(_eip712).verifyBuyNow(buyNowInp, buyerSignature, buyNowInp.buyer),
-            "incorrect buyer signature"
+            "BuyNowERC20::relayedBuyNow: incorrect buyer signature"
         );
-        _processBuyNow(buyNowInp, operator);
+        _processBuyNow(buyNowInp, operator, sellerSignature);
     }
 
     // PRIVATE & INTERNAL FUNCTIONS
 
     /**
-     * @dev Method that updates payer's local balance on arrival of a payment,
+     * @dev Method that updates buyer's local balance on arrival of a payment,
      *  re-using local balance if available, and transferring to this contract
      *  only the new funds required. Unlike in native crypto payments, here the exact minimal amount
      *  required is automatically transferred by this contract from the ERC20 contract, not depending on the
      *  amount provided by users as msg.value. There is therefore no need to account for any excess
      *  of provided funds.
-     * @param payer The address executing the payment
-     * @param newFundsNeeded The elsewhere computed minimum amount of funds required to be provided by the payer,
+     * @param buyer The address executing the payment
+     * @param newFundsNeeded The elsewhere computed minimum amount of funds required to be provided by the buyer,
      *  having possible re-use of local funds into account
-     * @param localFunds The elsewhere computed amount of funds available to the payer in this contract that will be
+     * @param localFunds The elsewhere computed amount of funds available to the buyer in this contract that will be
      *  re-used in the payment
      */
-    function _updatePayerBalanceOnPaymentReceived(
-        address payer,
+    function _updateBuyerBalanceOnPaymentReceived(
+        address buyer,
         uint256 newFundsNeeded,
         uint256 localFunds
     ) internal override {
         if (newFundsNeeded > 0) {
             require(
-                IERC20(_erc20).transferFrom(payer, address(this), newFundsNeeded),
-                "ERC20 transfer failed"
+                IERC20(_erc20).transferFrom(buyer, address(this), newFundsNeeded),
+                "BuyNowERC20::_updateBuyerBalanceOnPaymentReceived: ERC20 transfer failed"
             );
         }
-        _balanceOf[payer] -= localFunds;
+        _balanceOf[buyer] -= localFunds;
     }
 
     /**
@@ -100,6 +106,21 @@ contract BuyNowERC20 is IBuyNowERC20, BuyNowBase {
     /// @inheritdoc IBuyNowERC20
     function erc20() external view returns (address) {
         return _erc20;
+    }
+
+    /// @inheritdoc IBuyNowERC20
+    function erc20ContractName() external view returns (string memory) {
+        return IERC20Detailed(_erc20).name();
+    }
+
+    /// @inheritdoc IBuyNowERC20
+    function erc20ContractSymbol() external view returns (string memory) {
+        return IERC20Detailed(_erc20).symbol();
+    }
+
+    /// @inheritdoc IBuyNowERC20
+    function erc20ContractDecimals() external view returns (uint8) {
+        return IERC20Detailed(_erc20).decimals();
     }
 
     /// @inheritdoc IBuyNowERC20

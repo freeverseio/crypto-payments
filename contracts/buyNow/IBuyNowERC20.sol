@@ -19,7 +19,7 @@ interface IBuyNowERC20 is IBuyNowBase {
      * @notice Starts Payment process by the buyer.
      * @dev Executed by the buyer, who relays the operator's signature.
      *  This method will transfer only the minimum required amount from the bidder
-     *  to this contract, re-using any exisiting local balance.
+     *  to this contract, re-using any existing local balance.
      *  If all requirements are fulfilled, it stores the data relevant
      *  for the next steps of the payment, and it locks the funds
      *  in this contract.
@@ -28,10 +28,12 @@ interface IBuyNowERC20 is IBuyNowBase {
      *  Moves payment to ASSET_TRANSFERRING state.
      * @param buyNowInp The struct containing all required payment data
      * @param operatorSignature The signature of 'buyNowInp' by the operator
+     * @param sellerSignature the signature of the seller agreeing to list the asset
      */
     function buyNow(
         BuyNowInput calldata buyNowInp,
-        bytes calldata operatorSignature
+        bytes calldata operatorSignature,
+        bytes calldata sellerSignature
     ) external;
 
     /**
@@ -47,11 +49,13 @@ interface IBuyNowERC20 is IBuyNowBase {
      * @param buyNowInp The struct containing all required payment data
      * @param operatorSignature The signature of 'buyNowInp' by the operator
      * @param buyerSignature The signature of 'buyNowInp' by the buyer
+     * @param sellerSignature the signature of the seller agreeing to list the asset
      */
     function relayedBuyNow(
         BuyNowInput calldata buyNowInp,
         bytes calldata operatorSignature,
-        bytes calldata buyerSignature
+        bytes calldata buyerSignature,
+        bytes calldata sellerSignature
     ) external;
 
     /**
@@ -60,6 +64,28 @@ interface IBuyNowERC20 is IBuyNowBase {
      * @return the address of the ERC20 contract
      */
     function erc20() external view returns (address);
+
+    /**
+     * @notice Proxy that queries the name() method from an external
+     *  ERC20 contract, which may optionally implement it. 
+     * @return the return of the name() method call to the ERC20 contract
+     */
+    function erc20ContractName() external view returns (string memory);
+
+    /**
+     * @notice Proxy that queries the symbol() method from an external
+     *  ERC20 contract, which may optionally implement it. 
+     * @return the return of the symbol() method call to the ERC20 contract
+     */
+    function erc20ContractSymbol() external view returns (string memory);
+
+
+    /**
+     * @notice Proxy that queries the decimals() method from an external
+     *  ERC20 contract, which may optionally implement it. 
+     * @return the return of the decimals() method call to the ERC20 contract
+     */
+    function erc20ContractDecimals() external view returns (uint8);
 
     /**
      * @notice Returns the ERC20 balance of address in the ERC20 contract
