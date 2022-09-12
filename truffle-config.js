@@ -46,12 +46,17 @@ module.exports = {
     //   networkCheckTimeout: 1000000,
     //   timeoutBlocks: 5000, // # of blocks before a deployment times out  (minimum/default: 50)
     //   gasPrice: 20000000000,
-    //   network_id: '1337',
-    //   paymentsData: {
+    //   network_id: "*",
+    //   deployOptions: {
     //     currencyDescriptor: 'GanacheCoin',
+    //     isERC20: false, // if true, deploys the ERC20 version, otherwise, the native version
+    //     reuseERC712at: '0x', // if filled, it will reuse existing, otherwise it will deploy a new EIP712
+    //     erc20Address: '0xE0dAef177b21b142A1f9d483a2b71Ab1dAE7789a', //
+    //     minIncreasePercentage: 500, // 5 percent
+    //     time2Extend: 600, // 10 minutes
+    //     extendableBy: 172800, // 2 days
     //   },
     // },
-
     // matic: {
     //   provider: new HDWalletProvider(
     //     process.env.DEPLOYER_MNEMONIC,
@@ -60,39 +65,50 @@ module.exports = {
     //   network_id: 137,
     //   gasPrice: 70000000000, // fast = 5000000000, slow = 1000000000
     //   confirmations: 1,
-    //   paymentsData: {
+    //   deployOptions: {
     //     currencyDescriptor: 'MATIC',
+    //     isERC20: false, // if true, deploys the ERC20 version, otherwise, the native version
+    //     reuseERC712at: '0x', // if filled, it will reuse existing, otherwise it will deploy a new EIP712
+    //     erc20Address: '0x', //
+    //     minIncreasePercentage: 500, // 5 percent
+    //     time2Extend: 600, // 10 minutes
+    //     extendableBy: 172800, // 2 days
     //   },
     //   skipDryRun: true,
     // },
-
-    // Try these Mumbai nodes:
-    // - 'https://rpc-mumbai.maticvigil.com'
-    // - 'https://matic-mumbai.chainstacklabs.com'
     // matictestnet: {
     //   provider: new HDWalletProvider(
     //     process.env.DEPLOYER_MNEMONIC,
-    //     'https://matic-mumbai.chainstacklabs.com',
+    //     'https://rpc-mumbai.maticvigil.com', // others: 'https://matic-mumbai.chainstacklabs.com'
     //   ),
     //   network_id: 80001,
     //   confirmations: 1,
     //   skipDryRun: true,
-    //   paymentsData: {
+    //   deployOptions: {
     //     currencyDescriptor: 'MATIC on Mumbai',
+    //     isERC20: false, // if true, deploys the ERC20 version, otherwise, the native version
+    //     reuseERC712at: '0x', // if filled, it will reuse existing, otherwise it will deploy a new EIP712
+    //     erc20Address: '0x', //
+    //     minIncreasePercentage: 500, // 5 percent
+    //     time2Extend: 600, // 10 minutes
+    //     extendableBy: 172800, // 2 days
     //   },
     // },
-    // xdai: { // 0xA9c0F76cA045163E28afDdFe035ec76a44f5C1F3
+    // xdai: {
     //   provider: new HDWalletProvider(
-    //     [
-    //       process.env.DEPLOYER_MNEMONIC,
-    //       process.env.ASSET_OWNER_MNEMONIC
-    //     ],
-    //     'https://rpc.xdaichain.com/', // others: http://xdai.blackhole.gorengine.com:51943/ wss://xdai.poanetwork.dev/wss http://xdai.poanetwork.dev/ wss://rpc.xdaichain.com/wss
+    //     process.env.DEPLOYER_MNEMONIC,
+    //     'https://rpc.xdaichain.com/', // others: wss://xdai.poanetwork.dev/wss http://xdai.poanetwork.dev/ wss://rpc.xdaichain.com/wss
     //   ),
     //   network_id: 100,
     //   gasPrice: 5000000000, // fast = 5000000000, slow = 1000000000
-    //   paymentsData: {
+    //   deployOptions: {
     //     currencyDescriptor: 'xDai',
+    //     isERC20: false, // if true, deploys the ERC20 version, otherwise, the native version
+    //     reuseERC712at: '0x', // if filled, it will reuse existing, otherwise it will deploy a new EIP712
+    //     erc20Address: '0x', //
+    //     minIncreasePercentage: 500, // 5 percent
+    //     time2Extend: 600, // 10 minutes
+    //     extendableBy: 172800, // 2 days
     //   },
     //   networkCheckTimeout: 1000000,
     //   timeoutBlocks: 5000, // # of blocks before a deployment times out  (minimum/default: 50)
