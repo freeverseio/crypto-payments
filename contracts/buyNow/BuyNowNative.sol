@@ -17,7 +17,8 @@ contract BuyNowNative is IBuyNowNative, BuyNowBase {
     /// @inheritdoc IBuyNowNative
     function buyNow(
         BuyNowInput calldata buyNowInp,
-        bytes calldata operatorSignature
+        bytes calldata operatorSignature,
+        bytes calldata sellerSignature
     ) external payable {
         require(
             msg.sender == buyNowInp.buyer,
@@ -35,7 +36,7 @@ contract BuyNowNative is IBuyNowNative, BuyNowBase {
             (msg.value <= buyNowInp.amount),
             "BuyNowNative::buyNow: new funds provided must be less than bid amount"
         );
-        _processBuyNow(buyNowInp, operator);
+        _processBuyNow(buyNowInp, operator, sellerSignature);
     }
 
     // PRIVATE & INTERNAL FUNCTIONS

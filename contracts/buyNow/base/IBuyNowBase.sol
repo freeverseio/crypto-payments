@@ -163,8 +163,8 @@ interface IBuyNowBase is ISignableStructsBuyNow {
         // (subtracting fees) on a successful payment.        
         address seller;
 
-        // The address of the operator of this payment
-        address operator;
+        // the id of the universe that the asset belongs to.
+        uint256 universeId;
 
         // The address of the feesCollector of this payment
         address feesCollector;
@@ -355,7 +355,7 @@ interface IBuyNowBase is ISignableStructsBuyNow {
      * @notice Returns a descriptor about the currency that this contract accepts
      * @return the string describing the currency
      */
-    function acceptedCurrency() external view returns (string memory);
+    function currencyLongDescriptor() external view returns (string memory);
 
     /**
      * @notice Splits the funds required to provide 'amount' into two sources:

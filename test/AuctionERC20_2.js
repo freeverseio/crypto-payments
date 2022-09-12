@@ -6,7 +6,7 @@ const truffleAssert = require('truffle-assertions');
 const ethSigUtil = require('eth-sig-util');
 const { prepareDataToSignBid, prepareDataToSignAssetTransfer } = require('../helpers/signer');
 const {
-  fromHexString, toBN, provideFunds, registerAccountInLocalTestnet, getGasFee, assertBalances,
+  fromHexString, toBN, provideFunds, registerAccountInLocalTestnet, getGasFee, assertBalances, addressFromPk, generateSellerSig,
 } = require('../helpers/utils');
 const { TimeTravel } = require('../helpers/TimeTravel');
 
@@ -27,12 +27,18 @@ contract('AuctionERC20_2', (accounts) => {
   const enoughPercent = 1.06; // 6%
   const defaultTimeToExtend = 10 * 60; // 10 min
   const defaultExtendableBy = 24 * 3600; // 1 day
-  const [deployer, alice, bob, carol] = accounts;
+  const [deployer, aliceSister, bobSister, carol] = accounts;
   const feesCollector = carol;
+  const sellerPrivKey = '0x4f3edf983ac636a65a842ce7c78d9aa706d3b113bce9c46f30d7d21715b23b1d';
   const buyerPrivKey = '0x3B878F7892FBBFA30C8AED1DF317C19B853685E707C2CF0EE1927DC516060A54';
   const operatorPrivKey = '0x4A878F7892FBBFA30C8AED1DF317C19B853685E707C2CF0EE1927DC516060A54';
+  const bobPrivKey = '0xe485d098507f54e7733a205420dfddbe58db035fa577fc294ebd14db90767a52';
+  const sellerAccount = web3.eth.accounts.privateKeyToAccount(sellerPrivKey);
   const buyerAccount = web3.eth.accounts.privateKeyToAccount(buyerPrivKey);
   const operatorAccount = web3.eth.accounts.privateKeyToAccount(operatorPrivKey);
+  const bobAccount = web3.eth.accounts.privateKeyToAccount(bobPrivKey);
+  const alice = sellerAccount.address;
+  const bob = bobAccount.address;
   const operator = operatorAccount.address;
   const name = 'MYERC20';
   const symbol = 'FV20';
@@ -59,6 +65,7 @@ contract('AuctionERC20_2', (accounts) => {
   const initialBuyerETH = 1000000000000000000;
   const initialOperatorETH = 6000000000000000000;
   const timeTravel = new TimeTravel(web3);
+  const minimalSupply = Math.round(Number(initialBuyerETH) / 10);
 
   let erc20;
   let eip712;
@@ -77,10 +84,14 @@ contract('AuctionERC20_2', (accounts) => {
       defaultTimeToExtend,
       defaultExtendableBy,
     ).should.be.fulfilled;
+    await registerAccountInLocalTestnet(sellerAccount).should.be.fulfilled;
     await registerAccountInLocalTestnet(buyerAccount).should.be.fulfilled;
     await registerAccountInLocalTestnet(operatorAccount).should.be.fulfilled;
+    await registerAccountInLocalTestnet(bobAccount).should.be.fulfilled;
     await erc20.transfer(operator, initialOperatorERC20, { from: deployer });
     await provideFunds(deployer, operator, initialOperatorETH);
+    await provideFunds(deployer, bob, minimalSupply);
+    await provideFunds(deployer, bidData.seller, minimalSupply);
     await payments.setUniverseOperator(
       bidData.universeId,
       operator,
@@ -119,7 +130,7 @@ contract('AuctionERC20_2', (accounts) => {
 
   // Executes a relayedBid. Reused by many tests.
   // It first funds the buyer, then buyer approves, signs, and the operator relays the payment.
-  async function relayedBid(_bidData, _ERC20SupplyForBuyer, _ETHSupplyForBuyer, _bidderPK) {
+  async function relayedBid(_sellerPrivKey, _bidData, _ERC20SupplyForBuyer, _ETHSupplyForBuyer, _bidderPK) {
     // Prepare buyerAccount.address to be a buyer: fund her with ERC20, with ETH
     await erc20.transfer(_bidData.bidder, _ERC20SupplyForBuyer, { from: deployer });
     await provideFunds(deployer, _bidData.bidder, _ETHSupplyForBuyer);
@@ -131,15 +142,16 @@ contract('AuctionERC20_2', (accounts) => {
     const bidderPK = _bidderPK || buyerPrivKey;
     const sigBidder = await signEIP712(bidderPK, prepareDataToSignBid, _bidData, true);
     const sigOperator = await signEIP712(operatorPrivKey, prepareDataToSignBid, _bidData, true);
+    const sigSeller = generateSellerSig(_sellerPrivKey, _bidData.paymentId);
     // Pay
-    await payments.relayedBid(_bidData, sigBidder, sigOperator, { from: operator });
+    await payments.relayedBid(_bidData, sigBidder, sigOperator, sigSeller, { from: operator });
   }
 
   // Executes a Bid directly by buyer. Reused by many tests.
   // It first funds the buyer with _ETHSupplyForBuyer, _ERC20SupplyForBuyer
   // then builds the signature by the operator,
   // and the buyer relays the payment and provides funds.
-  async function bid(_bidData, _ERC20SupplyForBuyer, _ETHSupplyForBuyer) {
+  async function bid(_sellerPrivKey, _bidData, _ERC20SupplyForBuyer, _ETHSupplyForBuyer) {
     // Prepare bidder: fund her with ERC20 & ETH
     await erc20.transfer(_bidData.bidder, _ERC20SupplyForBuyer, { from: deployer });
     await provideFunds(deployer, _bidData.bidder, _ETHSupplyForBuyer);
@@ -151,7 +163,8 @@ contract('AuctionERC20_2', (accounts) => {
     const signature = await signEIP712(operatorPrivKey, prepareDataToSignBid, _bidData, true);
 
     // Pay
-    const receipt = await payments.bid(_bidData, signature, { from: _bidData.bidder });
+    const sigSeller = generateSellerSig(_sellerPrivKey, _bidData.paymentId);
+    const receipt = await payments.bid(_bidData, signature, sigSeller, { from: _bidData.bidder });
     const gasFee = getGasFee(receipt);
     return { signature, gasFee };
   }
@@ -183,7 +196,7 @@ contract('AuctionERC20_2', (accounts) => {
     // After payment has arrived, the bidAmount has been subtracted from external balances
     // in favour of the payments contract address. However, the balances in the
     // payments local address remain 0 until the payment moves to PAID or refunds take place.
-    await bid(bidData, initialBuyerERC20, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, initialBuyerERC20, initialBuyerETH);
 
     expectedERC20Buyer.iadd(toBN(initialBuyerERC20)).isub(toBN(bidData.bidAmount));
 
@@ -291,7 +304,7 @@ contract('AuctionERC20_2', (accounts) => {
     // After payment has arrived, the bidAmount has been subtracted from external balances
     // in favour of the payments contract address. However, the balances in the
     // payments local address remain 0 until the payment moves to PAID or refunds take place.
-    await relayedBid(bidData, initialBuyerERC20, initialBuyerETH);
+    await relayedBid(sellerPrivKey, bidData, initialBuyerERC20, initialBuyerETH);
 
     expectedERC20Buyer.iadd(toBN(initialBuyerERC20)).isub(toBN(bidData.bidAmount));
 
@@ -385,9 +398,9 @@ contract('AuctionERC20_2', (accounts) => {
     const expectedERC20Bob = toBN(await erc20.balanceOf(bob));
 
     // We will do 2 payments with equal seller, and 1 with a different seller (Bob)
-    await bid(bidData, initialBuyerERC20, initialBuyerETH);
-    await bid(bidData2, initialBuyerERC20, initialBuyerETH);
-    await bid(bidData3, initialBuyerERC20, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, initialBuyerERC20, initialBuyerETH);
+    await bid(sellerPrivKey, bidData2, initialBuyerERC20, initialBuyerETH);
+    await bid(bobPrivKey, bidData3, initialBuyerERC20, initialBuyerETH);
 
     await timeTravel.waitUntil(endsAt + 30);
     await finalize(bidData.paymentId, true, operatorPrivKey);
@@ -426,7 +439,7 @@ contract('AuctionERC20_2', (accounts) => {
     const expectedERC20Bidder2 = toBN(0);
     const expectedERC20Contract = toBN(0);
 
-    await bid(bidData, initialBuyerERC20, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, initialBuyerERC20, initialBuyerETH);
 
     assert.equal(initialBuyerERC20, 30000);
 
@@ -439,7 +452,7 @@ contract('AuctionERC20_2', (accounts) => {
       [expectedERC20Contract, expectedERC20Seller, expectedERC20Bidder1, expectedERC20Bidder2, expectedERC20FeesCollector],
     );
 
-    await bid(bidData2, initialBuyerERC20, initialBuyerETH);
+    await bid(sellerPrivKey, bidData2, initialBuyerERC20, initialBuyerETH);
 
     expectedERC20Bidder2.iadd(toBN(initialBuyerERC20 - bidData2.bidAmount));
     expectedERC20Contract.iadd(toBN(bidData2.bidAmount));
@@ -480,7 +493,7 @@ contract('AuctionERC20_2', (accounts) => {
     const expectedERC20Bidder2 = toBN(0);
     const expectedERC20Contract = toBN(0);
 
-    await bid(bidData, initialBuyerERC20, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, initialBuyerERC20, initialBuyerETH);
 
     assert.equal(initialBuyerERC20, 30000);
 
@@ -493,7 +506,7 @@ contract('AuctionERC20_2', (accounts) => {
       [expectedERC20Contract, expectedERC20Seller, expectedERC20Bidder1, expectedERC20Bidder2, expectedERC20FeesCollector],
     );
 
-    await bid(bidData2, initialBuyerERC20, initialBuyerETH);
+    await bid(sellerPrivKey, bidData2, initialBuyerERC20, initialBuyerETH);
 
     expectedERC20Bidder1.iadd(toBN(bidData.bidAmount));
     expectedERC20Bidder2.iadd(toBN(initialBuyerERC20 - bidData2.bidAmount));
@@ -535,9 +548,9 @@ contract('AuctionERC20_2', (accounts) => {
     const expectedERC20Bob = toBN(await erc20.balanceOf(bob));
 
     // We will do 2 payments with equal seller, and 1 with a different seller (Bob)
-    await relayedBid(bidData, initialBuyerERC20, initialBuyerETH);
-    await relayedBid(bidData2, initialBuyerERC20, initialBuyerETH);
-    await relayedBid(bidData3, initialBuyerERC20, initialBuyerETH);
+    await relayedBid(sellerPrivKey, bidData, initialBuyerERC20, initialBuyerETH);
+    await relayedBid(sellerPrivKey, bidData2, initialBuyerERC20, initialBuyerETH);
+    await relayedBid(bobPrivKey, bidData3, initialBuyerERC20, initialBuyerETH);
 
     await timeTravel.waitUntil(endsAt + 30);
     await finalize(bidData.paymentId, true, operatorPrivKey);
@@ -571,7 +584,7 @@ contract('AuctionERC20_2', (accounts) => {
     bidData2.seller = thisBidder;
     bidData2.bidder = carol;
 
-    await bid(bidData2, initialBuyerERC20, initialBuyerETH);
+    await bid(buyerPrivKey, bidData2, initialBuyerERC20, initialBuyerETH);
     await timeTravel.waitUntil(endsAt + 30);
     await finalize(bidData2.paymentId, true, operatorPrivKey);
 
@@ -610,7 +623,7 @@ contract('AuctionERC20_2', (accounts) => {
 
     // it is possible to bid even if owning 0 ERC20 outside the contract
     // (the ETH required here is just for gas costs)
-    await bid(bidData3, 0, initialBuyerETH);
+    await bid(sellerPrivKey, bidData3, 0, initialBuyerETH);
 
     // bidder just notices that there are less funds to withdraw
     expectedBidderLocalBalance.isub(toBN(bidData3.bidAmount));
@@ -631,7 +644,7 @@ contract('AuctionERC20_2', (accounts) => {
 
     // since bidder already has 275 in the local balance,
     // she needs to provide only 290 - 275 = 15
-    await bid(bidData4, 15, 0);
+    await bid(sellerPrivKey, bidData4, 15, 0);
 
     // local balance of bidder is now 0
     expectedBidderLocalBalance = toBN(0);
@@ -673,7 +686,7 @@ contract('AuctionERC20_2', (accounts) => {
     const bidData0 = JSON.parse(JSON.stringify(bidData));
     bidData0.bidAmount = 100;
 
-    await bid(bidData0, initialBuyerERC20, initialBuyerETH);
+    await bid(sellerPrivKey, bidData0, initialBuyerERC20, initialBuyerETH);
     assert.equal(await payments.paymentState(bidData0.paymentId), AUCTIONING);
 
     const bidData2 = JSON.parse(JSON.stringify(bidData0));
@@ -682,17 +695,17 @@ contract('AuctionERC20_2', (accounts) => {
 
     // Try to place another bid with non-agreed feeBPS
     bidData2.feeBPS = 4132;
-    await bid(bidData2, bidIncrease, 0).should.be.fulfilled;
+    await bid(sellerPrivKey, bidData2, bidIncrease, 0).should.be.fulfilled;
 
     // Try to place another bid with endsAt beyond extendableBy
     bidData2.bidAmount += bidIncrease;
     bidData2.endsAt = bidData0.endsAt + defaultExtendableBy + 1;
-    await bid(bidData2, bidIncrease, 0).should.be.fulfilled;
+    await bid(sellerPrivKey, bidData2, bidIncrease, 0).should.be.fulfilled;
   });
 
   it('If Bidder increases own bid, only the diff needed must be provided', async () => {
     await payments.registerAsSeller({ from: bidData.seller }).should.be.fulfilled;
-    await bid(bidData, bidData.bidAmount, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, bidData.bidAmount, initialBuyerETH);
 
     const bidData2 = JSON.parse(JSON.stringify(bidData));
     bidData2.bidAmount = Math.floor(enoughPercent * bidData.bidAmount);
@@ -700,13 +713,13 @@ contract('AuctionERC20_2', (accounts) => {
 
     // Cannot provide less than required
     await truffleAssert.reverts(
-      bid(bidData2, newFundsNeeded - 1, 0),
+      bid(sellerPrivKey, bidData2, newFundsNeeded - 1, 0),
       'transfer amount exceeds balance',
     );
 
     // possible to pay just the bare minimum, with no localBalance afterwards:
     const snapshot2 = await timeTravel.takeSnapshot();
-    await bid(bidData2, newFundsNeeded, 0);
+    await bid(sellerPrivKey, bidData2, newFundsNeeded, 0);
     await assertBalances(
       payments,
       [bidData2.bidder],
@@ -715,7 +728,7 @@ contract('AuctionERC20_2', (accounts) => {
     await timeTravel.revertToSnapShot(snapshot2.result);
 
     // impossible to pay some excess, no local balance left
-    await bid(bidData2, newFundsNeeded + 22, 0);
+    await bid(sellerPrivKey, bidData2, newFundsNeeded + 22, 0);
     await assertBalances(
       payments,
       [bidData2.bidder],
@@ -725,27 +738,27 @@ contract('AuctionERC20_2', (accounts) => {
 
   it('Bid must be some percentage larger than previous highest bid', async () => {
     await payments.registerAsSeller({ from: bidData.seller }).should.be.fulfilled;
-    await bid(bidData, initialBuyerERC20, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, initialBuyerERC20, initialBuyerETH);
 
     // try to bid again
     await truffleAssert.reverts(
-      bid(bidData, initialBuyerERC20, initialBuyerETH),
+      bid(sellerPrivKey, bidData, initialBuyerERC20, initialBuyerETH),
       'bid needs to be larger than previous bid by a certain percentage.',
     );
     const bidData2 = JSON.parse(JSON.stringify(bidData));
     bidData2.bidder = carol;
     bidData2.bidAmount = Math.floor(notEnoughPercent * bidData.bidAmount);
     await truffleAssert.reverts(
-      bid(bidData2, initialBuyerERC20, initialBuyerETH),
+      bid(sellerPrivKey, bidData2, initialBuyerERC20, initialBuyerETH),
       'bid needs to be larger than previous bid by a certain percentage.',
     );
     bidData2.bidAmount = Math.floor(enoughPercent * bidData.bidAmount);
-    await bid(bidData2, initialBuyerERC20, initialBuyerETH);
+    await bid(sellerPrivKey, bidData2, initialBuyerERC20, initialBuyerETH);
   });
 
   it('From PAID: no further action is accepted', async () => {
     await payments.registerAsSeller({ from: bidData.seller }).should.be.fulfilled;
-    await bid(bidData, initialBuyerERC20, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, initialBuyerERC20, initialBuyerETH);
     await timeTravel.waitUntil(endsAt + 30);
     await finalize(bidData.paymentId, true, operatorPrivKey);
     // try assetTransferSuccess
@@ -763,7 +776,7 @@ contract('AuctionERC20_2', (accounts) => {
     bidData2.bidder = operatorAccount.address;
     bidData2.bidAmount = Math.floor(enoughPercent * bidData.bidAmount);
     await truffleAssert.reverts(
-      bid(bidData2, initialBuyerERC20, initialBuyerETH),
+      bid(sellerPrivKey, bidData2, initialBuyerERC20, initialBuyerETH),
       'bids are only accepted if state is either NOT_STARTED or AUCTIONING',
     );
   });
@@ -799,7 +812,7 @@ contract('AuctionERC20_2', (accounts) => {
     // After payment has arrived, the bidAmount has been subtracted from the ERC20 contract
     // in favour of the payments contract address. However, the balances in the
     // payments local address remain 0 until the payment moves to PAID or refunds take place.
-    await bid(bidData, initialBuyerERC20, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, initialBuyerERC20, initialBuyerETH);
 
     expectedERC20Buyer.iadd(toBN(initialBuyerERC20)).isub(toBN(bidData.bidAmount));
 
@@ -882,7 +895,7 @@ contract('AuctionERC20_2', (accounts) => {
     // After payment has arrived, the amount has been subtracted from the ERC20 contract
     // in favour of the payments contract address. However, the balances in the
     // payments local address remain 0 until the payment moves to PAID or refunds take place.
-    await bid(bidData, initialBuyerERC20, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, initialBuyerERC20, initialBuyerETH);
 
     expectedERC20Buyer.iadd(toBN(initialBuyerERC20)).isub(toBN(bidData.bidAmount));
 
@@ -903,7 +916,7 @@ contract('AuctionERC20_2', (accounts) => {
 
     // Let's move to FAILED implicitly, by going beyond expiration time:
     const paymentWindow = await payments.paymentWindow();
-    await timeTravel.waitUntil(endsAt + Number(paymentWindow) + 10);
+    await timeTravel.waitUntil(endsAt + defaultExtendableBy + Number(paymentWindow) + 10);
 
     assert.equal(await payments.paymentState(bidData.paymentId), ASSET_TRANSFERRING);
 
@@ -948,7 +961,7 @@ contract('AuctionERC20_2', (accounts) => {
 
   it('finalize: only operator is authorized to sign', async () => {
     await payments.registerAsSeller({ from: bidData.seller }).should.be.fulfilled;
-    await bid(bidData, initialBuyerERC20, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, initialBuyerERC20, initialBuyerETH);
     await timeTravel.waitUntil(endsAt + 30);
     assert.equal(await payments.paymentState(bidData.paymentId), ASSET_TRANSFERRING);
     await truffleAssert.reverts(
@@ -963,7 +976,7 @@ contract('AuctionERC20_2', (accounts) => {
 
   it('ASSET_TRANSFERRING moves to PAID when someone relays operator confirmation of asset transfer success', async () => {
     await payments.registerAsSeller({ from: bidData.seller }).should.be.fulfilled;
-    await bid(bidData, initialBuyerERC20, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, initialBuyerERC20, initialBuyerETH);
     await timeTravel.waitUntil(endsAt + 30);
     assert.equal(await payments.paymentState(bidData.paymentId), ASSET_TRANSFERRING);
     await finalize(bidData.paymentId, true, operatorPrivKey);
@@ -985,7 +998,7 @@ contract('AuctionERC20_2', (accounts) => {
 
   it('ASSET_TRANSFERRING moves to REFUNDED when someone realays operator confirmation of asset transfer failed', async () => {
     await payments.registerAsSeller({ from: bidData.seller }).should.be.fulfilled;
-    await bid(bidData, initialBuyerERC20, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, initialBuyerERC20, initialBuyerETH);
     await timeTravel.waitUntil(endsAt + 30);
     assert.equal(await payments.paymentState(bidData.paymentId), ASSET_TRANSFERRING);
     await finalize(bidData.paymentId, false, operatorPrivKey);
@@ -1014,14 +1027,14 @@ contract('AuctionERC20_2', (accounts) => {
 
   it('ASSET_TRANSFERRING allows ACCEPTS_REFUND after expiration time', async () => {
     await payments.registerAsSeller({ from: bidData.seller }).should.be.fulfilled;
-    await bid(bidData, initialBuyerERC20, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, initialBuyerERC20, initialBuyerETH);
 
     await timeTravel.waitUntil(endsAt + 30);
     assert.equal(await payments.paymentState(bidData.paymentId), ASSET_TRANSFERRING);
 
     // wait just before expiration time, and check that state has not changed yet
     const paymentWindow = await payments.paymentWindow();
-    await timeTravel.waitUntil(endsAt + Number(paymentWindow) - 100);
+    await timeTravel.waitUntil(endsAt + defaultExtendableBy + Number(paymentWindow) - 100);
     assert.equal(await payments.acceptsRefunds(bidData.paymentId), false);
 
     // wait the remainder period to get beyond expiration time,
@@ -1036,13 +1049,13 @@ contract('AuctionERC20_2', (accounts) => {
 
     const expectedERC20Buyer = toBN(await erc20.balanceOf(bidData.bidder));
 
-    await bid(bidData, initialBuyerERC20, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, initialBuyerERC20, initialBuyerETH);
     await timeTravel.waitUntil(endsAt + 10);
     assert.equal(await payments.paymentState(bidData.paymentId), ASSET_TRANSFERRING);
 
     // wait beyond payment window to move to FAILED
     const paymentWindow = await payments.paymentWindow();
-    await timeTravel.wait(Number(paymentWindow) + 5);
+    await timeTravel.wait(defaultExtendableBy + Number(paymentWindow) + 5);
     assert.equal(await payments.acceptsRefunds(bidData.paymentId), true);
     // Check expected ERC20 of buyer before refunding:
     expectedERC20Buyer.iadd(toBN(initialBuyerERC20)).isub(toBN(bidData.bidAmount));
@@ -1070,13 +1083,13 @@ contract('AuctionERC20_2', (accounts) => {
 
     const expectedERC20Buyer = toBN(await erc20.balanceOf(bidData.bidder));
 
-    await bid(bidData, initialBuyerERC20, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, initialBuyerERC20, initialBuyerETH);
     await timeTravel.waitUntil(endsAt + 10);
     assert.equal(await payments.paymentState(bidData.paymentId), ASSET_TRANSFERRING);
 
     // wait beyond payment window to move to FAILED
     const paymentWindow = await payments.paymentWindow();
-    await timeTravel.wait(Number(paymentWindow) + 5);
+    await timeTravel.wait(defaultExtendableBy + Number(paymentWindow) + 5);
     assert.equal(await payments.acceptsRefunds(bidData.paymentId), true);
     // Check expected ERC20 of buyer before refunding:
     expectedERC20Buyer.iadd(toBN(initialBuyerERC20)).isub(toBN(bidData.bidAmount));
@@ -1096,21 +1109,21 @@ contract('AuctionERC20_2', (accounts) => {
 
   it('ASSET_TRANSFERRING blocks another Bid', async () => {
     await payments.registerAsSeller({ from: bidData.seller }).should.be.fulfilled;
-    await bid(bidData, initialBuyerERC20, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, initialBuyerERC20, initialBuyerETH);
     await timeTravel.waitUntil(endsAt + 10);
     assert.equal(await payments.paymentState(bidData.paymentId), ASSET_TRANSFERRING);
     const bidData2 = JSON.parse(JSON.stringify(bidData));
     bidData2.bidder = operatorAccount.address;
     bidData2.bidAmount = 2 * bidData.bidAmount;
     await truffleAssert.reverts(
-      bid(bidData2, initialBuyerERC20, initialBuyerETH),
+      bid(sellerPrivKey, bidData2, initialBuyerERC20, initialBuyerETH),
       'bids are only accepted if state is either NOT_STARTED or AUCTIONING',
     );
   });
 
   it('ASSET_TRANSFERRING blocks refund', async () => {
     await payments.registerAsSeller({ from: bidData.seller }).should.be.fulfilled;
-    await bid(bidData, initialBuyerERC20, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, initialBuyerERC20, initialBuyerETH);
     await timeTravel.waitUntil(endsAt + 10);
     assert.equal(await payments.paymentState(bidData.paymentId), ASSET_TRANSFERRING);
     await truffleAssert.reverts(
@@ -1122,11 +1135,11 @@ contract('AuctionERC20_2', (accounts) => {
   it('if isSellerRegistrationRequired == false, no need to register', async () => {
     await payments.setIsSellerRegistrationRequired(true, { from: deployer }).should.be.fulfilled;
     await truffleAssert.reverts(
-      bid(bidData, initialBuyerERC20, initialBuyerETH),
+      bid(sellerPrivKey, bidData, initialBuyerERC20, initialBuyerETH),
       'seller not registered',
     );
     await payments.setIsSellerRegistrationRequired(false, { from: deployer }).should.be.fulfilled;
-    await bid(bidData, initialBuyerERC20, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, initialBuyerERC20, initialBuyerETH);
   });
 
   it('Bid requirements are correctly checked', async () => {
@@ -1143,21 +1156,22 @@ contract('AuctionERC20_2', (accounts) => {
     // And also funding Carol with ETH so that she can approve
     await provideFunds(deployer, bidData2.bidder, initialBuyerETH);
 
+    const sigSeller = generateSellerSig(sellerPrivKey, bidData2.paymentId);
     // should fail unless the buyer is the sender of the TX
     await truffleAssert.reverts(
-      payments.bid(bidData2, dummySignature, { from: operator }),
+      payments.bid(bidData2, dummySignature, sigSeller, { from: operator }),
       'only bidder can execute this function',
     );
 
     await truffleAssert.fails(
-      payments.bid(bidData2, dummySignature, { from: bidData2.bidder }),
+      payments.bid(bidData2, dummySignature, sigSeller, { from: bidData2.bidder }),
       'incorrect operator signature',
     );
 
     const signature = await signEIP712(operatorPrivKey, prepareDataToSignBid, bidData2, true);
 
     await truffleAssert.fails(
-      payments.bid(bidData2, signature, { from: bidData2.bidder }),
+      payments.bid(bidData2, signature, sigSeller, { from: bidData2.bidder }),
       'seller not registered',
     );
 
@@ -1165,7 +1179,7 @@ contract('AuctionERC20_2', (accounts) => {
 
     // fails due to insufficient funds:
     await truffleAssert.fails(
-      payments.bid(bidData2, signature, { from: bidData2.bidder }),
+      payments.bid(bidData2, signature, sigSeller, { from: bidData2.bidder }),
       'insufficient allowance',
     );
 
@@ -1173,7 +1187,7 @@ contract('AuctionERC20_2', (accounts) => {
     await erc20.transfer(bidData2.bidder, bidData2.bidAmount, { from: deployer });
 
     await truffleAssert.fails(
-      payments.bid(bidData2, signature, { from: bidData2.bidder }),
+      payments.bid(bidData2, signature, sigSeller, { from: bidData2.bidder }),
       'insufficient allowance.',
     );
 
@@ -1184,11 +1198,11 @@ contract('AuctionERC20_2', (accounts) => {
     const wrongPaymentData2 = JSON.parse(JSON.stringify(bidData2));
     wrongPaymentData2.feeBPS = 10100;
     await truffleAssert.fails(
-      bid(wrongPaymentData2, 0, 0),
+      bid(sellerPrivKey, wrongPaymentData2, 0, 0),
       'fee cannot be larger than maxFeeBPS',
     );
 
     // it finally is accepted
-    await payments.bid(bidData2, signature, { from: bidData2.bidder }).should.be.fulfilled;
+    await payments.bid(bidData2, signature, sigSeller, { from: bidData2.bidder }).should.be.fulfilled;
   });
 });
