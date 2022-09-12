@@ -355,7 +355,7 @@ interface IBuyNowBase is ISignableStructsBuyNow {
      * @notice Returns a descriptor about the currency that this contract accepts
      * @return the string describing the currency
      */
-    function acceptedCurrency() external view returns (string memory);
+    function currencyLongDescriptor() external view returns (string memory);
 
     /**
      * @notice Splits the funds required to provide 'amount' into two sources:

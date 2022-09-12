@@ -18,7 +18,8 @@ interface ISignableStructsBuyNow {
     struct BuyNowInput {
         // the unique Id that identifies a payment,
         // common to both Auctions and BuyNows,
-        // obtained from a sufficiently large source of entropy.
+        // obtained from hashing params related to the listing, 
+        // including a sufficiently large source of entropy.
         bytes32 paymentId;
 
         // the price of the asset, an integer expressed in the
