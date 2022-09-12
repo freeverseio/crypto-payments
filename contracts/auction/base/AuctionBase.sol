@@ -3,6 +3,7 @@ pragma solidity =0.8.14;
 
 import "./IAuctionBase.sol";
 import "../../buyNow/base/BuyNowBase.sol";
+import "./IEIP712VerifierAuction.sol";
 
 /**
  * @title Base Escrow Contract for Payments, that adds an Auction mode
@@ -12,10 +13,13 @@ import "../../buyNow/base/BuyNowBase.sol";
  */
 
 abstract contract AuctionBase is IAuctionBase, BuyNowBase {
-    // min amount of time that needs to be guaranteed between the maximum
-    // extension of an auction and the expirationTime, beyond which
-    // buyers can be refunded, to leave time for asset transfer.
-    uint256 private constant _SAFETY_TRANSFER_WINDOW = 2 hours;
+    // max amount of time allowed between the arrival of the first bid
+    // of an auction, and the planned auction endsAt, in absence of late bids.
+    uint256 public constant _MAX_AUCTION_DURATION = 15 days;
+
+    // max total amount of time that an auction's endsAt can be
+    // increased as a result of accumulated late-arriving bids.
+    uint256 public constant _MAX_EXTENDABLE_BY = 2 days;
 
     // the default config parameters used by Auctions
     AuctionConfig internal _defaultAuctionConfig;
@@ -36,12 +40,11 @@ abstract contract AuctionBase is IAuctionBase, BuyNowBase {
         uint256 time2Extend,
         uint256 extendableBy
     ) {
-        _defaultAuctionConfig = _createAuctionConfig(
+       setDefaultAuctionConfig(
             minIncreasePercentage,
             time2Extend,
             extendableBy
         );
-        emit DefaultAuctionConfig(minIncreasePercentage, time2Extend, extendableBy);
     }
 
     /// @inheritdoc IAuctionBase
@@ -49,13 +52,17 @@ abstract contract AuctionBase is IAuctionBase, BuyNowBase {
         uint256 minIncreasePercentage,
         uint256 time2Extend,
         uint256 extendableBy
-    ) external onlyOwner {
+    ) public onlyOwner {
+        AuctionConfig memory oldConfig = _defaultAuctionConfig;
         _defaultAuctionConfig = _createAuctionConfig(
             minIncreasePercentage,
             time2Extend,
             extendableBy
         );
-        emit DefaultAuctionConfig(minIncreasePercentage, time2Extend, extendableBy);
+        emit DefaultAuctionConfig(
+            minIncreasePercentage, time2Extend, extendableBy,
+            oldConfig.minIncreasePercentage, oldConfig.timeToExtend, oldConfig.extendableBy
+        );
     }
 
     /// @inheritdoc IAuctionBase
@@ -65,6 +72,7 @@ abstract contract AuctionBase is IAuctionBase, BuyNowBase {
         uint256 time2Extend,
         uint256 extendableBy
     ) external onlyOwner {
+        AuctionConfig memory oldConfig =  _universeAuctionConfig[universeId];
         _universeAuctionConfig[universeId] = _createAuctionConfig(
             minIncreasePercentage,
             time2Extend,
@@ -73,9 +81,8 @@ abstract contract AuctionBase is IAuctionBase, BuyNowBase {
         _universeAuctionConfigExists[universeId] = true;
         emit UniverseAuctionConfig(
             universeId,
-            minIncreasePercentage,
-            time2Extend,
-            extendableBy
+            minIncreasePercentage, time2Extend, extendableBy,
+            oldConfig.minIncreasePercentage, oldConfig.timeToExtend, oldConfig.extendableBy
         );
     }
 
@@ -102,7 +109,11 @@ abstract contract AuctionBase is IAuctionBase, BuyNowBase {
      * @param operator The address of the operator of this payment.
      * @param bidInput The BidInput struct
      */
-    function _processBid(address operator, BidInput calldata bidInput) internal {
+    function _processBid(
+        address operator,
+        BidInput calldata bidInput,
+        bytes calldata sellerSignature
+    ) internal {
         State state = assertBidInputsOK(bidInput);
         assertSeparateRoles(operator, bidInput.bidder, bidInput.seller);
         (uint256 newFundsNeeded, uint256 localFunds, bool isSameBidder) = splitAuctionFundingSources(bidInput);
@@ -110,27 +121,29 @@ abstract contract AuctionBase is IAuctionBase, BuyNowBase {
 
         if (state == State.NotStarted) {
             // If 1st bid for auction => new auction is to be created:
-            // 1.- revert unless enough time is left between maximum extension and expirationTime,
-            //     so that there is enough time to conduct assetTransfer
-            uint256 extendableUntil = bidInput.endsAt + universeExtendableBy(bidInput.universeId);
-            uint256 expirationTime = bidInput.endsAt + _paymentWindow;
+            // 1. Only verify the permission to list the asset on the first bid to arrive
             require(
-                extendableUntil + _SAFETY_TRANSFER_WINDOW < expirationTime,
-                "AuctionBase::_processBid: cannot start auction that is extendable too close to expiration time"
+                IEIP712VerifierAuction(_eip712).verifySellerSignature(
+                    sellerSignature,
+                    bidInput
+                ),
+                "AuctionBase::_processBid: incorrect seller signature"
             );
             // 2.- store the part of the data common to Auctions and BuyNows;
             //     maxBidder and maxBid are stored in this struct, and updated on successive bids
+            uint256 extendableUntil = bidInput.endsAt + universeExtendableBy(bidInput.universeId);
+            uint256 expirationTime = extendableUntil + _paymentWindow;
             _payments[bidInput.paymentId] = Payment(
                 State.Auctioning,
                 bidInput.bidder,
                 bidInput.seller,
-                operator,
+                bidInput.universeId,
                 universeFeesCollector(bidInput.universeId),
                 expirationTime,
                 bidInput.feeBPS,
                 bidInput.bidAmount
             );
-            // 3.- store the part of the data only relevant to Auctions;
+            // 2.- store the part of the data only relevant to Auctions;
             //     only 'endsAt' may change in this struct (and only on arrival of late bids)
             _auctions[bidInput.paymentId] = ExistingAuction(
                 bidInput.endsAt,
@@ -215,6 +228,10 @@ abstract contract AuctionBase is IAuctionBase, BuyNowBase {
             minIncreasePercentage > 0,
             "AuctionBase::_createAuctionConfig: minIncreasePercentage must be non-zero"
         );
+        require(
+            extendableBy <= _MAX_EXTENDABLE_BY,
+            "AuctionBase::_createAuctionConfig: extendableBy exceeds maximum allowed"
+        );
         return AuctionConfig(minIncreasePercentage, time2Extend, extendableBy);
     }
 
@@ -247,6 +264,10 @@ abstract contract AuctionBase is IAuctionBase, BuyNowBase {
             require(
                 bidInput.endsAt >= currentTime,
                 "AuctionBase::assertBidInputsOK: endsAt cannot be in the past"
+            );
+            require(
+                bidInput.endsAt < currentTime + _MAX_AUCTION_DURATION,
+                "AuctionBase::assertBidInputsOK: endsAt exceeds maximum allowed"
             );
             require(
                 bidInput.feeBPS <= _maxFeeBPS,

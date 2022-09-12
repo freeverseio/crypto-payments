@@ -16,8 +16,9 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
     // the address of the deployed EIP712 verifier contract
     address internal _eip712;
 
-    // a descriptor of the accepted currency (be it native or ERC20)
-    string private _acceptedCurrency;
+    // a human readable long descripton of the accepted currency 
+    // (be it native or ERC20), e.g. "USDC on Polygon PoS"
+    string private _currencyLongDescriptor;
 
     //  the amount of seconds that a payment can remain
     //  in ASSET_TRANSFERRING state without positive
@@ -49,11 +50,11 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
     mapping(address => uint256) internal _balanceOf;
 
     constructor(string memory currencyDescriptor, address eip712) {
-        _eip712 = eip712;
-        _acceptedCurrency = currencyDescriptor;
-        _paymentWindow = 30 days;
+        setEIP712(eip712);
+        _currencyLongDescriptor = currencyDescriptor;
+        setPaymentWindow(30 days);
         _isSellerRegistrationRequired = false;
-        _maxFeeBPS = 3000; // 30%
+        setMaxFeeBPS(3000); // 30%
     }
 
     /**
@@ -62,9 +63,9 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
      *  EIP712 spec/code changes in the future
      * @param eip712address The address of the new EIP712 contract.
      */
-    function setEIP712(address eip712address) external onlyOwner {
+    function setEIP712(address eip712address) public onlyOwner {
+        emit EIP712(eip712address, _eip712);
         _eip712 = eip712address;
-        emit EIP712(eip712address);
     }
 
     /**
@@ -73,13 +74,13 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
      *  After this time, the payment moves to FAILED, allowing buyer to withdraw.
      * @param window The amount of time available, in seconds.
      */
-    function setPaymentWindow(uint256 window) external onlyOwner {
+    function setPaymentWindow(uint256 window) public onlyOwner {
         require(
             (window < 60 days) && (window > 3 hours),
             "BuyNowBase::setPaymentWindow: payment window outside limits"
         );
+        emit PaymentWindow(window, _paymentWindow);
         _paymentWindow = window;
-        emit PaymentWindow(window);
     }
 
     /**
@@ -88,13 +89,13 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
      *  a value of 10000 BPS would correspond to 100% (no limit at all)
      * @param feeBPS The new max fee (in BPS units)
      */
-    function setMaxFeeBPS(uint256 feeBPS) external onlyOwner {
+    function setMaxFeeBPS(uint256 feeBPS) public onlyOwner {
         require(
             (feeBPS <= 10000) && (feeBPS >= 0),
             "BuyNowBase::setMaxFeeBPS: maxFeeBPS outside limits"
         );
+        emit MaxFeeBPS(feeBPS, _maxFeeBPS);
         _maxFeeBPS = feeBPS;
-        emit MaxFeeBPS(feeBPS);
     }
 
     /**
@@ -121,8 +122,8 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
 
     /// @inheritdoc IBuyNowBase
     function setOnlyUserCanWithdraw(bool onlyUserCan) external {
+        emit OnlyUserCanWithdraw(msg.sender, onlyUserCan, _onlyUserCanWithdraw[msg.sender]);
         _onlyUserCanWithdraw[msg.sender] = onlyUserCan;
-        emit OnlyUserCanWithdraw(msg.sender, onlyUserCan);
     }
 
     /// @inheritdoc IBuyNowBase
@@ -215,9 +216,18 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
      * @param buyNowInp The BuyNowInput struct
      * @param operator The address of the operator of this payment.
      */
-    function _processBuyNow(BuyNowInput calldata buyNowInp, address operator)
-        internal
-    {
+    function _processBuyNow(
+        BuyNowInput calldata buyNowInp,
+        address operator,
+        bytes calldata sellerSignature
+    ) internal {
+        require(
+            IEIP712VerifierBuyNow(_eip712).verifySellerSignature(
+                sellerSignature,
+                buyNowInp
+            ),
+            "BuyNowBase::_processBuyNow: incorrect seller signature"
+        );
         assertBuyNowInputsOK(buyNowInp);
         assertSeparateRoles(operator, buyNowInp.buyer, buyNowInp.seller);
         (uint256 newFundsNeeded, uint256 localFunds) = splitFundingSources(
@@ -229,7 +239,7 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
             State.AssetTransferring,
             buyNowInp.buyer,
             buyNowInp.seller,
-            operator,
+            buyNowInp.universeId,
             universeFeesCollector(buyNowInp.universeId),
             block.timestamp + _paymentWindow,
             buyNowInp.feeBPS,
@@ -273,7 +283,7 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
             IEIP712VerifierBuyNow(_eip712).verifyAssetTransferResult(
                 transferResult,
                 operatorSignature,
-                payment.operator
+                universeOperator(payment.universeId)
             ),
             "BuyNowBase::_finalize: only the operator can sign an assetTransferResult"
         );
@@ -419,8 +429,8 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
     }
 
     /// @inheritdoc IBuyNowBase
-    function acceptedCurrency() external view returns (string memory) {
-        return _acceptedCurrency;
+    function currencyLongDescriptor() external view returns (string memory) {
+        return _currencyLongDescriptor;
     }
 
     /// @inheritdoc IBuyNowBase
