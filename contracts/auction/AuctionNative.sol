@@ -4,7 +4,6 @@ pragma solidity =0.8.14;
 import "./IAuctionNative.sol";
 import "./base/AuctionBase.sol";
 import "../buyNow/BuyNowNative.sol";
-import "./base/IEIP712VerifierAuction.sol";
 
 /**
  * @title Escrow Contract for Payments in Auction & BuyNow modes, in Native Cryptocurrencies.
@@ -25,10 +24,11 @@ contract AuctionNative is IAuctionNative, AuctionBase, BuyNowNative {
     {}
 
     /// @inheritdoc IAuctionNative
-    function bid(BidInput calldata bidInput, bytes calldata operatorSignature)
-        external
-        payable
-    {
+    function bid(
+        BidInput calldata bidInput,
+        bytes calldata operatorSignature,
+        bytes calldata sellerSignature
+    ) external payable {
         require(
             msg.sender == bidInput.bidder,
             "AuctionNative::bid: only bidder can execute this function"
@@ -49,7 +49,7 @@ contract AuctionNative is IAuctionNative, AuctionBase, BuyNowNative {
             (msg.value <= bidInput.bidAmount),
             "AuctionNative::bid: new funds provided must be less than bid amount"
         );
-        _processBid(operator, bidInput);
+        _processBid(operator, bidInput, sellerSignature);
     }
 
     /// @inheritdoc IAuctionBase

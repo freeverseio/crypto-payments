@@ -24,6 +24,7 @@ contract('Operators', (accounts) => {
     assert.equal(await operator.defaultOperator(), deployer);
     const past = await operator.getPastEvents('DefaultOperator', { fromBlock: 0, toBlock: 'latest' }).should.be.fulfilled;
     assert.equal(past[0].args.operator, deployer);
+    assert.equal(past[0].args.prevOperator, '0x0000000000000000000000000000000000000000');
   });
 
   it('set default operator', async () => {
@@ -38,6 +39,7 @@ contract('Operators', (accounts) => {
     const past = await operator.getPastEvents('DefaultOperator', { fromBlock: 0, toBlock: 'latest' }).should.be.fulfilled;
     assert.equal(past[0].args.operator, deployer);
     assert.equal(past[1].args.operator, bob);
+    assert.equal(past[1].args.prevOperator, deployer);
   });
 
   it('Add and remove universe operators', async () => {

@@ -24,6 +24,7 @@ contract('FeesCollectors', (accounts) => {
     assert.equal(await feesCollector.defaultFeesCollector(), accounts[0]);
     const past = await feesCollector.getPastEvents('DefaultFeesCollector', { fromBlock: 0, toBlock: 'latest' }).should.be.fulfilled;
     assert.equal(past[0].args.feesCollector, deployer);
+    assert.equal(past[0].args.prevFeesCollector, '0x0000000000000000000000000000000000000000');
   });
 
   it('set default fees collector', async () => {
@@ -38,6 +39,7 @@ contract('FeesCollectors', (accounts) => {
     const past = await feesCollector.getPastEvents('DefaultFeesCollector', { fromBlock: 0, toBlock: 'latest' }).should.be.fulfilled;
     assert.equal(past[0].args.feesCollector, deployer);
     assert.equal(past[1].args.feesCollector, bob);
+    assert.equal(past[1].args.prevFeesCollector, deployer);
   });
 
   it('Add and remove universe fees collector', async () => {
