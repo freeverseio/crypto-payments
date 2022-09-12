@@ -46,8 +46,13 @@ interface IAuctionERC20 is ISignableStructsAuction {
      *  whereas if it arrives on an on-going auction, it remains in AUCTIONING.
      * @param bidInput The struct containing all required bid data
      * @param operatorSignature The signature of 'bidInput' by the operator
+     * @param sellerSignature the signature of the seller agreeing to list the asset
      */
-    function bid(BidInput calldata bidInput, bytes calldata operatorSignature) external;
+    function bid(
+        BidInput calldata bidInput,
+        bytes calldata operatorSignature,
+        bytes calldata sellerSignature
+    ) external;
 
     /**
      * @notice Processes an arriving bid, and either starts a new Auction process,
@@ -64,11 +69,13 @@ interface IAuctionERC20 is ISignableStructsAuction {
      * @param bidInput The struct containing all required bid data
      * @param bidderSignature The signature of 'bidInput' by the bidder
      * @param operatorSignature The signature of 'bidInput' by the operator
+     * @param sellerSignature the signature of the seller agreeing to list the asset
      */
     function relayedBid(
         BidInput calldata bidInput,
         bytes calldata bidderSignature,
-        bytes calldata operatorSignature
+        bytes calldata operatorSignature,
+        bytes calldata sellerSignature
     ) external;
 
     /**

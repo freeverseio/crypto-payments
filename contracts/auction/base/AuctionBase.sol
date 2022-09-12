@@ -3,6 +3,7 @@ pragma solidity =0.8.14;
 
 import "./IAuctionBase.sol";
 import "../../buyNow/base/BuyNowBase.sol";
+import "./IEIP712VerifierAuction.sol";
 
 /**
  * @title Base Escrow Contract for Payments, that adds an Auction mode
@@ -108,7 +109,11 @@ abstract contract AuctionBase is IAuctionBase, BuyNowBase {
      * @param operator The address of the operator of this payment.
      * @param bidInput The BidInput struct
      */
-    function _processBid(address operator, BidInput calldata bidInput) internal {
+    function _processBid(
+        address operator,
+        BidInput calldata bidInput,
+        bytes calldata sellerSignature
+    ) internal {
         State state = assertBidInputsOK(bidInput);
         assertSeparateRoles(operator, bidInput.bidder, bidInput.seller);
         (uint256 newFundsNeeded, uint256 localFunds, bool isSameBidder) = splitAuctionFundingSources(bidInput);
@@ -116,7 +121,15 @@ abstract contract AuctionBase is IAuctionBase, BuyNowBase {
 
         if (state == State.NotStarted) {
             // If 1st bid for auction => new auction is to be created:
-            // 1.- store the part of the data common to Auctions and BuyNows;
+            // 1. Only verify the permission to list the asset on the first bid to arrive
+            require(
+                IEIP712VerifierAuction(_eip712).verifySellerSignature(
+                    sellerSignature,
+                    bidInput
+                ),
+                "AuctionBase::_processBid: incorrect seller signature"
+            );
+            // 2.- store the part of the data common to Auctions and BuyNows;
             //     maxBidder and maxBid are stored in this struct, and updated on successive bids
             uint256 extendableUntil = bidInput.endsAt + universeExtendableBy(bidInput.universeId);
             uint256 expirationTime = extendableUntil + _paymentWindow;

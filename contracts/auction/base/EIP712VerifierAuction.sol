@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/utils/cryptography/draft-EIP712.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 /**
- * @title Verification of MetaTXs for Auctions using EIP712, that extends
+ * @title Verification of MetaTXs for Auctions, that extends
  *  the verification for BuyNows inherited in EIP712VerifierBuyNow.
  * @author Freeverse.io, www.freeverse.io
  * @notice Full contract documentation in IEIP712VerifierAuction
@@ -32,5 +32,18 @@ contract EIP712VerifierAuction is IEIP712VerifierAuction, EIP712VerifierBuyNow {
             keccak256(abi.encode(_TYPEHASH_BID, bidInput))
         ).recover(signature);
         return signer == recoveredSigner;
+    }
+
+    /// @inheritdoc IEIP712VerifierAuction
+    function verifySellerSignature(
+        bytes calldata sellerSignature,
+        BidInput calldata bidInput
+    ) public pure returns (bool) {
+        /*
+         * @dev The sellerSignature is also required off-chain (in the L2) to initiate the listing;
+         *  in the L2, 'paymentId' is basically the digest of all listing extended set of params,
+         *  so in the current implementation, the code basically has to check that the seller signed 'paymentId'.
+        */
+        return bidInput.seller == bidInput.paymentId.toEthSignedMessageHash().recover(sellerSignature);
     }
 }

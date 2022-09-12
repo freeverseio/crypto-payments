@@ -28,10 +28,12 @@ interface IBuyNowERC20 is IBuyNowBase {
      *  Moves payment to ASSET_TRANSFERRING state.
      * @param buyNowInp The struct containing all required payment data
      * @param operatorSignature The signature of 'buyNowInp' by the operator
+     * @param sellerSignature the signature of the seller agreeing to list the asset
      */
     function buyNow(
         BuyNowInput calldata buyNowInp,
-        bytes calldata operatorSignature
+        bytes calldata operatorSignature,
+        bytes calldata sellerSignature
     ) external;
 
     /**
@@ -47,11 +49,13 @@ interface IBuyNowERC20 is IBuyNowBase {
      * @param buyNowInp The struct containing all required payment data
      * @param operatorSignature The signature of 'buyNowInp' by the operator
      * @param buyerSignature The signature of 'buyNowInp' by the buyer
+     * @param sellerSignature the signature of the seller agreeing to list the asset
      */
     function relayedBuyNow(
         BuyNowInput calldata buyNowInp,
         bytes calldata operatorSignature,
-        bytes calldata buyerSignature
+        bytes calldata buyerSignature,
+        bytes calldata sellerSignature
     ) external;
 
     /**
