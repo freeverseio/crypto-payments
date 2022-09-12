@@ -24,15 +24,21 @@ contract Operators is Ownable {
     /**
      * @dev Event emitted on change of default operator
      * @param operator The address of the new default operator
+     * @param prevOperator The previous value of operator
      */
-    event DefaultOperator(address indexed operator);
+    event DefaultOperator(address indexed operator, address indexed prevOperator);
 
     /**
      * @dev Event emitted on change of a specific universe operator
      * @param universeId The id of the universe
      * @param operator The address of the new universe operator
+     * @param prevOperator The previous value of operator
      */
-    event UniverseOperator(uint256 indexed universeId, address indexed operator);
+    event UniverseOperator(
+        uint256 indexed universeId,
+        address indexed operator,
+        address indexed prevOperator
+    );
 
     /// @dev The address of the default operator:
     address private _defaultOperator;
@@ -41,17 +47,16 @@ contract Operators is Ownable {
     mapping(uint256 => address) private _universeOperators;
 
     constructor() {
-        _defaultOperator = msg.sender;
-        emit DefaultOperator(msg.sender);
+        setDefaultOperator(msg.sender);
     }
 
     /**
      * @dev Sets a new default operator
      * @param operator The address of the new default operator
      */
-    function setDefaultOperator(address operator) external onlyOwner {
+    function setDefaultOperator(address operator) public onlyOwner {
+        emit DefaultOperator(operator, _defaultOperator);
         _defaultOperator = operator;
-        emit DefaultOperator(operator);
     }
 
     /**
@@ -63,8 +68,8 @@ contract Operators is Ownable {
         external
         onlyOwner
     {
+        emit UniverseOperator(universeId, operator, universeOperator(universeId));
         _universeOperators[universeId] = operator;
-        emit UniverseOperator(universeId, operator);
     }
 
     /**
@@ -73,8 +78,8 @@ contract Operators is Ownable {
      * @param universeId The id of the universe
      */
     function removeUniverseOperator(uint256 universeId) external onlyOwner {
+        emit UniverseOperator(universeId, _defaultOperator, _universeOperators[universeId]);
         delete _universeOperators[universeId];
-        emit UniverseOperator(universeId, _defaultOperator);
     }
 
     /**

@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 const fromHexString = (hexString) => new Uint8Array(hexString.match(/.{1,2}/g).map((byte) => parseInt(byte, 16)));
 
 const toBN = (x) => web3.utils.toBN(x);
@@ -25,10 +26,25 @@ function getGasFee(receipt) {
 
 async function assertBalances(_contract, addresses, amounts) {
   for (let i = 0; i < addresses.length; i += 1) {
-    // eslint-disable-next-line no-await-in-loop
-    assert.equal(String(await _contract.balanceOf(addresses[i])), String(amounts[i]));
+    if (_contract === 'native') {
+      // eslint-disable-next-line no-await-in-loop
+      assert.equal(String(await web3.eth.getBalance(addresses[i])), String(amounts[i]));
+    } else {
+      // eslint-disable-next-line no-await-in-loop
+      assert.equal(String(await _contract.balanceOf(addresses[i])), String(amounts[i]));
+    }
   }
 }
+
+const addressFromPk = (pvk) => {
+  const acc = web3.eth.accounts.privateKeyToAccount(pvk);
+  return acc.address;
+};
+
+const generateSellerSig = (pvk, digest) => {
+  const acc = web3.eth.accounts.privateKeyToAccount(pvk);
+  return acc.sign(digest).signature;
+};
 
 module.exports = {
   fromHexString,
@@ -37,4 +53,6 @@ module.exports = {
   registerAccountInLocalTestnet,
   getGasFee,
   assertBalances,
+  addressFromPk,
+  generateSellerSig,
 };

@@ -20,7 +20,7 @@ Both inherit from the BuyNow-only versions, which are based on previously audite
 
 The Auction contracts inherit from the BuyNow contracts, extending the functionality to enable Auctions, while re-using all stages of the State Machine after `ASSET_TRANSFERRING`.
 
-Buyers/bidders provide explicit signatures agreeing to let a specified `Operator` address act as an Oracle, and be responsible for signing the success or failure of the asset transfer, which is conducted outside this contract upon reception of funds. This external process is typically associated to a defined layer-2 flow and governance. On start of any payment, signatures of both the buyer/bidder and the Operator are required and verified.
+Buyers/bidders provide explicit signatures agreeing to let a specified `Operator` address act as an Oracle, and be responsible for signing the success or failure of the asset transfer, which is conducted outside this contract upon reception of funds. This external process is typically associated to a defined layer-2 flow and governance. On start of any payment, signatures of both the buyer/bidder and the Operator are required and verified. Seller signatures are also provided, showing agreement to list the asset as ruled by every explicit paymentId.
 
 If no confirmation is received from the Operator during the defined `PaymentWindow`, all funds received from the buyer are made available to him/her for refund. Throughout the contracts, this moment is labeled as `expirationTime`.
 
@@ -64,6 +64,8 @@ For ERC20 flows, the user must first allow this payment contract to receive fund
 Once the allowance step is cleared, there are two different flavours of the `bid/buyNow` methods to get to the same place: direct and relayed:
 - in the `bid/buyNow` methods, the buyer is the `msg.sender` (the buyer therefore signs the TX), and the Operator's EIP712-signature of the `bid/buyNow` parameters is provided as input to the call;
 - in the `relayedBid/relayedBuyNow` methods, anyone can be `msg.sender`, but both the operator and the buyer's EIP712-signatures of the `bid/buyNow` parameters are provided as input to the call.
+
+In all cases, the seller signature is also provided; in the case of auctions, such signature is only verified upon arrival of the first bid, to avoid unnecessary gas costs.
 
 ## UML Diagram
 
