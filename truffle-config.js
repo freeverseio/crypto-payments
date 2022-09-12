@@ -50,7 +50,7 @@ module.exports = {
     //   deployOptions: {
     //     currencyDescriptor: 'GanacheCoin',
     //     isERC20: false, // if true, deploys the ERC20 version, otherwise, the native version
-    //     reuseERC712at: '0x', // if filled, it will reuse existing, otherwise it will deploy a new EIP712
+    //     reuseEIP712at: '0x', // if filled, it will reuse existing, otherwise it will deploy a new EIP712
     //     erc20Address: '0xE0dAef177b21b142A1f9d483a2b71Ab1dAE7789a', //
     //     minIncreasePercentage: 500, // 5 percent
     //     time2Extend: 600, // 10 minutes
@@ -68,7 +68,7 @@ module.exports = {
     //   deployOptions: {
     //     currencyDescriptor: 'MATIC',
     //     isERC20: false, // if true, deploys the ERC20 version, otherwise, the native version
-    //     reuseERC712at: '0x', // if filled, it will reuse existing, otherwise it will deploy a new EIP712
+    //     reuseEIP712at: '0x', // if filled, it will reuse existing, otherwise it will deploy a new EIP712
     //     erc20Address: '0x', //
     //     minIncreasePercentage: 500, // 5 percent
     //     time2Extend: 600, // 10 minutes
@@ -87,7 +87,7 @@ module.exports = {
     //   deployOptions: {
     //     currencyDescriptor: 'MATIC on Mumbai',
     //     isERC20: false, // if true, deploys the ERC20 version, otherwise, the native version
-    //     reuseERC712at: '0x', // if filled, it will reuse existing, otherwise it will deploy a new EIP712
+    //     reuseEIP712at: '0x', // if filled, it will reuse existing, otherwise it will deploy a new EIP712
     //     erc20Address: '0x', //
     //     minIncreasePercentage: 500, // 5 percent
     //     time2Extend: 600, // 10 minutes
@@ -104,7 +104,7 @@ module.exports = {
     //   deployOptions: {
     //     currencyDescriptor: 'xDai',
     //     isERC20: false, // if true, deploys the ERC20 version, otherwise, the native version
-    //     reuseERC712at: '0x', // if filled, it will reuse existing, otherwise it will deploy a new EIP712
+    //     reuseEIP712at: '0x', // if filled, it will reuse existing, otherwise it will deploy a new EIP712
     //     erc20Address: '0x', //
     //     minIncreasePercentage: 500, // 5 percent
     //     time2Extend: 600, // 10 minutes

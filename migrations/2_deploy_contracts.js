@@ -21,14 +21,14 @@ module.exports = (deployer, network) => {
     const version = 1;
 
     // Reuse existing EIP712Verifier unless specified in deployOptions:
-    let erc712address = deployOptions.reuseERC712at;
-    if (web3.utils.isAddress(erc712address)) {
-      console.log(`...Reusing existing EIP712 Verifier at ${erc712address}`);
+    let eip712address = deployOptions.reuseEIP712at;
+    if (web3.utils.isAddress(eip712address)) {
+      console.log(`...Reusing existing EIP712 Verifier at ${eip712address}`);
     } else {
       console.log('...Deploying EIP712 Verifier...');
       const eip712 = await EIP712Verifier.new(name, version).should.be.fulfilled;
       console.log(`...Deploying EIP712 Verifier... deployed at: ${eip712.address}`);
-      erc712address = eip712.address;
+      eip712address = eip712.address;
     }
 
     // Deploy Native Crypto contract is so specified in deployOptions:
@@ -36,7 +36,7 @@ module.exports = (deployer, network) => {
       console.log('...Deploying Auctions in Native Crypto...');
       const auctionNative = await AuctionNative.new(
         deployOptions.currencyDescriptor,
-        erc712address,
+        eip712address,
         deployOptions.minIncreasePercentage,
         deployOptions.time2Extend,
         deployOptions.extendableBy,
@@ -56,7 +56,7 @@ module.exports = (deployer, network) => {
       const auctionERC20 = await AuctionERC20.new(
         deployOptions.erc20Address,
         deployOptions.currencyDescriptor,
-        erc712address,
+        eip712address,
         deployOptions.minIncreasePercentage,
         deployOptions.time2Extend,
         deployOptions.extendableBy,

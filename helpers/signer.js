@@ -1,4 +1,4 @@
-const ERC712DomainTypes = [
+const EIP712DomainTypes = [
   { name: 'name', type: 'string' },
   { name: 'version', type: 'string' },
   { name: 'chainId', type: 'uint256' },
@@ -31,7 +31,7 @@ const AssetTransferResult = [
   { name: 'wasSuccessful', type: 'bool' },
 ];
 
-function getERC712DomainInstance(chainId, contractAddress, isERC20) {
+function getEIP712DomainInstance(chainId, contractAddress, isERC20) {
   const name = (isERC20 === true) ? 'LivingAssets ERC20 Payments' : 'LivingAssets Native CryptoPayments';
   return {
     name,
@@ -47,10 +47,10 @@ function prepareDataToSignBuyNow({
   return {
     data: {
       types: {
-        EIP712Domain: ERC712DomainTypes,
+        EIP712Domain: EIP712DomainTypes,
         BuyNowInput,
       },
-      domain: getERC712DomainInstance(chainId, contractAddress, isERC20),
+      domain: getEIP712DomainInstance(chainId, contractAddress, isERC20),
       primaryType: 'BuyNowInput',
       message: msg,
     },
@@ -63,10 +63,10 @@ function prepareDataToSignBid({
   return {
     data: {
       types: {
-        EIP712Domain: ERC712DomainTypes,
+        EIP712Domain: EIP712DomainTypes,
         BidInput,
       },
-      domain: getERC712DomainInstance(chainId, contractAddress, isERC20),
+      domain: getEIP712DomainInstance(chainId, contractAddress, isERC20),
       primaryType: 'BidInput',
       message: msg,
     },
@@ -79,10 +79,10 @@ function prepareDataToSignAssetTransfer({
   return {
     data: {
       types: {
-        EIP712Domain: ERC712DomainTypes,
+        EIP712Domain: EIP712DomainTypes,
         AssetTransferResult,
       },
-      domain: getERC712DomainInstance(chainId, contractAddress, isERC20),
+      domain: getEIP712DomainInstance(chainId, contractAddress, isERC20),
       primaryType: 'AssetTransferResult',
       message: msg,
     },
