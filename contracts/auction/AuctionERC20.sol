@@ -4,7 +4,6 @@ pragma solidity =0.8.14;
 import "./IAuctionERC20.sol";
 import "./base/AuctionBase.sol";
 import "../buyNow/BuyNowERC20.sol";
-import "./base/IEIP712VerifierAuction.sol";
 
 /**
  * @title Escrow Contract for Payments in Auction & BuyNow modes, in ERC20 tokens.
@@ -41,7 +40,11 @@ contract AuctionERC20 is IAuctionERC20, AuctionBase, BuyNowERC20 {
     }
 
     /// @inheritdoc IAuctionERC20
-    function bid(BidInput calldata bidInput, bytes calldata operatorSignature) external {
+    function bid(
+        BidInput calldata bidInput,
+        bytes calldata operatorSignature,
+        bytes calldata sellerSignature
+    ) external {
         require(
             msg.sender == bidInput.bidder,
             "AuctionERC20::bid: only bidder can execute this function"
@@ -55,14 +58,15 @@ contract AuctionERC20 is IAuctionERC20, AuctionBase, BuyNowERC20 {
             ),
             "AuctionERC20::bid: incorrect operator signature"
         );
-        _processBid(operator, bidInput);
+        _processBid(operator, bidInput, sellerSignature);
     }
 
     /// @inheritdoc IAuctionERC20
     function relayedBid(
         BidInput calldata bidInput,
         bytes calldata bidderSignature,
-        bytes calldata operatorSignature
+        bytes calldata operatorSignature,
+        bytes calldata sellerSignature
     ) external {
         address operator = universeOperator(bidInput.universeId);
         require(
@@ -81,7 +85,7 @@ contract AuctionERC20 is IAuctionERC20, AuctionBase, BuyNowERC20 {
             ),
             "AuctionERC20::relayedBid: incorrect bidder signature"
         );
-        _processBid(operator, bidInput);
+        _processBid(operator, bidInput, sellerSignature);
     }
 
     /**

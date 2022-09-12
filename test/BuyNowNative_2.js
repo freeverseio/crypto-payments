@@ -6,7 +6,7 @@ const truffleAssert = require('truffle-assertions');
 const ethSigUtil = require('eth-sig-util');
 const { prepareDataToSignBuyNow, prepareDataToSignAssetTransfer } = require('../helpers/signer');
 const {
-  fromHexString, toBN, provideFunds, registerAccountInLocalTestnet, getGasFee, assertBalances,
+  fromHexString, toBN, provideFunds, registerAccountInLocalTestnet, getGasFee, assertBalances, addressFromPk, generateSellerSig,
 } = require('../helpers/utils');
 const { TimeTravel } = require('../helpers/TimeTravel');
 
@@ -21,13 +21,19 @@ contract('BuyNowNative2', (accounts) => {
   // eslint-disable-next-line no-unused-vars
   const it2 = async (text, f) => {};
   const CURRENCY_DESCRIPTOR = 'SUPER COIN';
-  const [deployer, alice, bob, carol] = accounts;
+  const [deployer, aliceSister, bobSister, carol] = accounts;
   const feesCollector = carol;
+  const sellerPrivKey = '0x4f3edf983ac636a65a842ce7c78d9aa706d3b113bce9c46f30d7d21715b23b1d';
   const buyerPrivKey = '0x3B878F7892FBBFA30C8AED1DF317C19B853685E707C2CF0EE1927DC516060A54';
   const operatorPrivKey = '0x4A878F7892FBBFA30C8AED1DF317C19B853685E707C2CF0EE1927DC516060A54';
+  const bobPrivKey = '0xe485d098507f54e7733a205420dfddbe58db035fa577fc294ebd14db90767a52';
+  const sellerAccount = web3.eth.accounts.privateKeyToAccount(sellerPrivKey);
   const buyerAccount = web3.eth.accounts.privateKeyToAccount(buyerPrivKey);
   const operatorAccount = web3.eth.accounts.privateKeyToAccount(operatorPrivKey);
+  const bobAccount = web3.eth.accounts.privateKeyToAccount(bobPrivKey);
+  const alice = sellerAccount.address;
   const operator = operatorAccount.address;
+  const bob = bobAccount.address;
   const dummySignature = '0x009a76c8f1c6f4286eb295ddc60d1fbe306880cbc5d36178c67e97d4993d6bfc112c56ff9b4d988af904cd107cdcc61f11461d6a436e986b665bb88e1b6d32c81c';
   const defaultAmount = 300;
   const defaultFeeBPS = 500; // 5%
@@ -47,6 +53,7 @@ contract('BuyNowNative2', (accounts) => {
   const initialBuyerETH = 1000000000000000000;
   const initialOperatorETH = 6000000000000000000;
   const timeTravel = new TimeTravel(web3);
+  const minimalSupply = Math.round(Number(initialBuyerETH) / 10);
 
   let eip712;
   let payments;
@@ -56,9 +63,13 @@ contract('BuyNowNative2', (accounts) => {
     snapshot = await timeTravel.takeSnapshot();
     eip712 = await EIP712Verifier.new('LivingAssets Native CryptoPayments', '1').should.be.fulfilled;
     payments = await BuyNowNative.new(CURRENCY_DESCRIPTOR, eip712.address).should.be.fulfilled;
+    await registerAccountInLocalTestnet(sellerAccount).should.be.fulfilled;
     await registerAccountInLocalTestnet(buyerAccount).should.be.fulfilled;
     await registerAccountInLocalTestnet(operatorAccount).should.be.fulfilled;
+    await registerAccountInLocalTestnet(bobAccount).should.be.fulfilled;
     await provideFunds(deployer, operator, initialOperatorETH);
+    await provideFunds(deployer, bob, minimalSupply);
+    await provideFunds(deployer, paymentData.seller, minimalSupply);
     await payments.setUniverseOperator(
       paymentData.universeId,
       operator,
@@ -99,7 +110,7 @@ contract('BuyNowNative2', (accounts) => {
 
   // Executes a Payment. Reused by many tests.
   // It first funds the buyer, then buyer approves, signs, and the operator relays the payment.
-  async function buyNow(_paymentData, _ETHSupplyForBuyer, _txAmount) {
+  async function buyNow(_sellerPrivKey, _paymentData, _ETHSupplyForBuyer, _txAmount) {
     await provideFunds(deployer, buyerAccount.address, _ETHSupplyForBuyer);
 
     // Operator signs purchase
@@ -113,22 +124,11 @@ contract('BuyNowNative2', (accounts) => {
     );
 
     // Pay
+    const sigSeller = generateSellerSig(_sellerPrivKey, _paymentData.paymentId);
     const value = _txAmount >= 0 ? _txAmount : _paymentData.amount;
-    const receipt = await payments.buyNow(_paymentData, signature, { from: _paymentData.buyer, value });
+    const receipt = await payments.buyNow(_paymentData, signature, sigSeller, { from: _paymentData.buyer, value });
     const gasFee = getGasFee(receipt);
     return { signature, gasFee };
-  }
-
-  async function assertBalances(_contract, addresses, amounts) {
-    for (let i = 0; i < addresses.length; i += 1) {
-      if (_contract === 'native') {
-        // eslint-disable-next-line no-await-in-loop
-        assert.equal(String(await web3.eth.getBalance(addresses[i])), String(amounts[i]));
-      } else {
-        // eslint-disable-next-line no-await-in-loop
-        assert.equal(String(await _contract.balanceOf(addresses[i])), String(amounts[i]));
-      }
-    }
   }
 
   it('From PAID: seller can withdraw, all balances work as expected', async () => {
@@ -154,7 +154,7 @@ contract('BuyNowNative2', (accounts) => {
     // After payment has arrived, the amount has been subtracted from native coin balances
     // in favour of the payments contract address. However, the balances in the
     // payments local address remain 0 until the payment moves to PAID or refunds take place.
-    const { gasFee } = await buyNow(paymentData, initialBuyerETH);
+    const { gasFee } = await buyNow(sellerPrivKey, paymentData, initialBuyerETH);
 
     expectedNativeBuyer.iadd(toBN(initialBuyerETH))
       .isub(toBN(paymentData.amount))
@@ -261,7 +261,7 @@ contract('BuyNowNative2', (accounts) => {
     // After payment has arrived, the amount has been subtracted from native coin balances
     // in favour of the payments contract address. However, the balances in the
     // payments local address remain 0 until the payment moves to PAID or refunds take place.
-    const { gasFee } = await buyNow(paymentData, initialBuyerETH);
+    const { gasFee } = await buyNow(sellerPrivKey, paymentData, initialBuyerETH);
 
     expectedNativeBuyer.iadd(toBN(initialBuyerETH))
       .isub(toBN(paymentData.amount))
@@ -336,7 +336,7 @@ contract('BuyNowNative2', (accounts) => {
     // After payment has arrived, the amount has been subtracted from native coin balances
     // in favour of the payments contract address. However, the balances in the
     // payments local address remain 0 until the payment moves to PAID or refunds take place.
-    const { gasFee } = await buyNow(paymentData, initialBuyerETH);
+    const { gasFee } = await buyNow(sellerPrivKey, paymentData, initialBuyerETH);
 
     expectedNativeBuyer.iadd(toBN(initialBuyerETH))
       .isub(toBN(paymentData.amount))
@@ -425,7 +425,7 @@ contract('BuyNowNative2', (accounts) => {
     // After payment has arrived, the amount has been subtracted from native coin balances
     // in favour of the payments contract address. However, the balances in the
     // payments local address remain 0 until the payment moves to PAID or refunds take place.
-    const { gasFee } = await buyNow(paymentData, initialBuyerETH);
+    const { gasFee } = await buyNow(sellerPrivKey, paymentData, initialBuyerETH);
 
     expectedNativeBuyer.iadd(toBN(initialBuyerETH))
       .isub(toBN(paymentData.amount))
@@ -534,9 +534,9 @@ contract('BuyNowNative2', (accounts) => {
     const expectedNativeBob = toBN(await web3.eth.getBalance(bob));
 
     // We will do 2 payments with equal seller, and 1 with a different seller (Bob)
-    await buyNow(paymentData, initialBuyerETH);
-    await buyNow(paymentData2, initialBuyerETH);
-    await buyNow(paymentData3, initialBuyerETH);
+    await buyNow(sellerPrivKey, paymentData, initialBuyerETH);
+    await buyNow(sellerPrivKey, paymentData2, initialBuyerETH);
+    await buyNow(bobPrivKey, paymentData3, initialBuyerETH);
 
     await finalize(paymentData.paymentId, true, operatorPrivKey);
     await finalize(paymentData2.paymentId, true, operatorPrivKey);
@@ -567,7 +567,7 @@ contract('BuyNowNative2', (accounts) => {
     paymentData2.seller = paymentData.buyer;
     paymentData2.buyer = carol; // let the buyer be anyone
 
-    await buyNow(paymentData2, initialBuyerETH);
+    await buyNow(buyerPrivKey, paymentData2, initialBuyerETH);
     await finalize(paymentData2.paymentId, true, operatorPrivKey);
 
     const feeAmount = Math.floor(Number(paymentData2.amount) * paymentData2.feeBPS) / 10000;
@@ -587,18 +587,18 @@ contract('BuyNowNative2', (accounts) => {
 
     // Cannot provide more than amount
     await truffleAssert.reverts(
-      buyNow(paymentData3, initialBuyerETH, paymentData3.amount + 1),
+      buyNow(sellerPrivKey, paymentData3, initialBuyerETH, paymentData3.amount + 1),
       'new funds provided must be less than bid amount',
     );
     // Cannot provide less than required
     await truffleAssert.reverts(
-      buyNow(paymentData3, initialBuyerETH, extraFundsRequired - 1),
+      buyNow(sellerPrivKey, paymentData3, initialBuyerETH, extraFundsRequired - 1),
       'new funds provided are not within required range',
     );
 
     // possible to pay just the bare minimum, with no localBalance afterwards:
     const snapshot2 = await timeTravel.takeSnapshot();
-    await buyNow(paymentData3, initialBuyerETH, extraFundsRequired);
+    await buyNow(sellerPrivKey, paymentData3, initialBuyerETH, extraFundsRequired);
     await assertBalances(
       payments,
       [paymentData3.buyer],
@@ -607,7 +607,7 @@ contract('BuyNowNative2', (accounts) => {
     await timeTravel.revertToSnapShot(snapshot2.result);
 
     // possible to pay some excess, with local balance afterwards
-    await buyNow(paymentData3, initialBuyerETH, extraFundsRequired + 22);
+    await buyNow(sellerPrivKey, paymentData3, initialBuyerETH, extraFundsRequired + 22);
     await assertBalances(
       payments,
       [paymentData3.buyer],
@@ -618,7 +618,7 @@ contract('BuyNowNative2', (accounts) => {
   it('Withdraw of portion of available funds works', async () => {
     const expectedNativeSeller = toBN(await web3.eth.getBalance(paymentData.seller));
 
-    await buyNow(paymentData, initialBuyerETH);
+    await buyNow(sellerPrivKey, paymentData, initialBuyerETH);
     await finalize(paymentData.paymentId, true, operatorPrivKey);
 
     const feeAmount = Math.floor(Number(paymentData.amount) * paymentData.feeBPS) / 10000;
@@ -667,7 +667,7 @@ contract('BuyNowNative2', (accounts) => {
   });
 
   it('Withdraw of portion of available funds fails if not enough local funds', async () => {
-    await buyNow(paymentData, initialBuyerETH);
+    await buyNow(sellerPrivKey, paymentData, initialBuyerETH);
     await finalize(paymentData.paymentId, true, operatorPrivKey);
 
     const feeAmount = Math.floor(Number(paymentData.amount) * paymentData.feeBPS) / 10000;
@@ -683,7 +683,7 @@ contract('BuyNowNative2', (accounts) => {
 
   it('From PAID: no further action is accepted', async () => {
     await payments.registerAsSeller({ from: paymentData.seller }).should.be.fulfilled;
-    const { signature } = await buyNow(paymentData, initialBuyerETH);
+    const { signature } = await buyNow(sellerPrivKey, paymentData, initialBuyerETH);
     await finalize(paymentData.paymentId, true, operatorPrivKey);
     // try assetTransferSuccess
     await truffleAssert.reverts(
@@ -696,8 +696,10 @@ contract('BuyNowNative2', (accounts) => {
       'payment not initially in asset transferring state',
     );
     // try to buyNow again
+    const sigSeller = generateSellerSig(sellerPrivKey, paymentData.paymentId);
+
     await truffleAssert.reverts(
-      payments.buyNow(paymentData, signature, { from: paymentData.buyer }),
+      payments.buyNow(paymentData, signature, sigSeller, { from: paymentData.buyer }),
       'payment in incorrect current state',
     );
   });
@@ -728,7 +730,7 @@ contract('BuyNowNative2', (accounts) => {
     // After payment has arrived, the amount has been subtracted from the external balance
     // in favour of the payments contract address. However, the balances in the
     // payments local address remain 0 until the payment moves to PAID or refunds take place.
-    const { gasFee } = await buyNow(paymentData, initialBuyerETH);
+    const { gasFee } = await buyNow(sellerPrivKey, paymentData, initialBuyerETH);
 
     expectedNativeBuyer.iadd(toBN(initialBuyerETH))
       .isub(toBN(paymentData.amount))
@@ -808,7 +810,7 @@ contract('BuyNowNative2', (accounts) => {
     // After payment has arrived, the amount has been subtracted from the external balance
     // in favour of the payments contract address. However, the balances in the
     // payments local address remain 0 until the payment moves to PAID or refunds take place.
-    const { gasFee } = await buyNow(paymentData, initialBuyerETH);
+    const { gasFee } = await buyNow(sellerPrivKey, paymentData, initialBuyerETH);
 
     expectedNativeBuyer.iadd(toBN(initialBuyerETH))
       .isub(toBN(paymentData.amount))
@@ -869,7 +871,7 @@ contract('BuyNowNative2', (accounts) => {
 
   it('finalize: only operator is authorized to sign', async () => {
     await payments.registerAsSeller({ from: paymentData.seller }).should.be.fulfilled;
-    await buyNow(paymentData, initialBuyerETH);
+    await buyNow(sellerPrivKey, paymentData, initialBuyerETH);
     assert.equal(await payments.paymentState(paymentData.paymentId), ASSET_TRANSFERRING);
     await truffleAssert.reverts(
       finalize(paymentData.paymentId, true, buyerPrivKey),
@@ -883,7 +885,7 @@ contract('BuyNowNative2', (accounts) => {
 
   it('ASSET_TRANSFERRING moves to PAID when someone relays operator confirmation of asset transfer success', async () => {
     await payments.registerAsSeller({ from: paymentData.seller }).should.be.fulfilled;
-    await buyNow(paymentData, initialBuyerETH);
+    await buyNow(sellerPrivKey, paymentData, initialBuyerETH);
     assert.equal(await payments.paymentState(paymentData.paymentId), ASSET_TRANSFERRING);
     await finalize(paymentData.paymentId, true, operatorPrivKey);
     assert.equal(await payments.paymentState(paymentData.paymentId), PAID);
@@ -904,7 +906,7 @@ contract('BuyNowNative2', (accounts) => {
 
   it('ASSET_TRANSFERRING moves to REFUNDED when someone realays operator confirmation of asset transfer failed', async () => {
     await payments.registerAsSeller({ from: paymentData.seller }).should.be.fulfilled;
-    await buyNow(paymentData, initialBuyerETH);
+    await buyNow(sellerPrivKey, paymentData, initialBuyerETH);
     assert.equal(await payments.paymentState(paymentData.paymentId), ASSET_TRANSFERRING);
     await finalize(paymentData.paymentId, false, operatorPrivKey);
     assert.equal(await payments.paymentState(paymentData.paymentId), REFUNDED);
@@ -932,7 +934,7 @@ contract('BuyNowNative2', (accounts) => {
 
   it('ASSET_TRANSFERRING allows ACCEPTS_REFUND after expiration time', async () => {
     await payments.registerAsSeller({ from: paymentData.seller }).should.be.fulfilled;
-    await buyNow(paymentData, initialBuyerETH);
+    await buyNow(sellerPrivKey, paymentData, initialBuyerETH);
     assert.equal(await payments.paymentState(paymentData.paymentId), ASSET_TRANSFERRING);
     const paymentWindow = await payments.paymentWindow();
     // wait just before expiration time, and check that state has not changed yet
@@ -950,7 +952,7 @@ contract('BuyNowNative2', (accounts) => {
 
     const expectedNativeBuyer = toBN(await web3.eth.getBalance(paymentData.buyer));
 
-    const { gasFee } = await buyNow(paymentData, initialBuyerETH);
+    const { gasFee } = await buyNow(sellerPrivKey, paymentData, initialBuyerETH);
     assert.equal(await payments.paymentState(paymentData.paymentId), ASSET_TRANSFERRING);
 
     // wait beyond payment window to move to FAILED
@@ -977,17 +979,18 @@ contract('BuyNowNative2', (accounts) => {
 
   it('ASSET_TRANSFERRING blocks another Payment', async () => {
     await payments.registerAsSeller({ from: paymentData.seller }).should.be.fulfilled;
-    const { signature } = await buyNow(paymentData, initialBuyerETH);
+    const { signature } = await buyNow(sellerPrivKey, paymentData, initialBuyerETH);
     assert.equal(await payments.paymentState(paymentData.paymentId), ASSET_TRANSFERRING);
+    const sigSeller = generateSellerSig(sellerPrivKey, paymentData.paymentId);
     await truffleAssert.reverts(
-      payments.buyNow(paymentData, signature, { from: paymentData.buyer, value: paymentData.amount }),
+      payments.buyNow(paymentData, signature, sigSeller, { from: paymentData.buyer, value: paymentData.amount }),
       'payment in incorrect current state',
     );
   });
 
   it('ASSET_TRANSFERRING blocks refund', async () => {
     await payments.registerAsSeller({ from: paymentData.seller }).should.be.fulfilled;
-    await buyNow(paymentData, initialBuyerETH);
+    await buyNow(sellerPrivKey, paymentData, initialBuyerETH);
     assert.equal(await payments.paymentState(paymentData.paymentId), ASSET_TRANSFERRING);
     await truffleAssert.reverts(
       payments.refund(paymentData.paymentId),
@@ -1010,12 +1013,13 @@ contract('BuyNowNative2', (accounts) => {
 
     // fails unless registration is not required:
     assert.equal(await payments.isRegisteredSeller(paymentData.seller), false);
+    const sigSeller = generateSellerSig(sellerPrivKey, paymentData.paymentId);
     await truffleAssert.reverts(
-      payments.buyNow(paymentData, signature, { from: paymentData.buyer, value: paymentData.amount }),
+      payments.buyNow(paymentData, signature, sigSeller, { from: paymentData.buyer, value: paymentData.amount }),
       'seller not registered',
     );
     await payments.setIsSellerRegistrationRequired(false, { from: deployer }).should.be.fulfilled;
-    await payments.buyNow(paymentData, signature, { from: paymentData.buyer, value: paymentData.amount }).should.be.fulfilled;
+    await payments.buyNow(paymentData, signature, sigSeller, { from: paymentData.buyer, value: paymentData.amount }).should.be.fulfilled;
   });
 
   it('Payment requirements are correctly checked', async () => {
@@ -1033,13 +1037,14 @@ contract('BuyNowNative2', (accounts) => {
     await provideFunds(deployer, buyerAccount.address, initialBuyerETH);
 
     // should fail unless the buyer is the sender of the TX
+    const sigSeller2 = generateSellerSig(sellerPrivKey, paymentData2.paymentId);
     await truffleAssert.reverts(
-      payments.buyNow(paymentData2, dummySignature, { from: operator, value: paymentData2.amount }),
+      payments.buyNow(paymentData2, dummySignature, sigSeller2, { from: operator, value: paymentData2.amount }),
       'only buyer can execute this function',
     );
 
     await truffleAssert.fails(
-      payments.buyNow(paymentData2, dummySignature, { from: paymentData2.buyer, value: paymentData2.amount }),
+      payments.buyNow(paymentData2, dummySignature, sigSeller2, { from: paymentData2.buyer, value: paymentData2.amount }),
       'incorrect operator signature',
     );
 
@@ -1053,14 +1058,14 @@ contract('BuyNowNative2', (accounts) => {
     );
 
     await truffleAssert.fails(
-      payments.buyNow(paymentData2, signature, { from: paymentData2.buyer, value: paymentData2.amount }),
+      payments.buyNow(paymentData2, signature, sigSeller2, { from: paymentData2.buyer, value: paymentData2.amount }),
       'seller not registered',
     );
 
     await payments.registerAsSeller({ from: paymentData2.seller }).should.be.fulfilled;
 
     // fails due to insufficient funds:
-    await payments.buyNow(paymentData2, signature, { from: paymentData2.buyer, value: paymentData2.amount }).should.be.rejected;
+    await payments.buyNow(paymentData2, signature, sigSeller2, { from: paymentData2.buyer, value: paymentData2.amount }).should.be.rejected;
 
     await provideFunds(deployer, buyerAccount.address, initialBuyerETH);
 
@@ -1069,11 +1074,11 @@ contract('BuyNowNative2', (accounts) => {
     wrongPaymentData2.feeBPS = 10100;
 
     await truffleAssert.fails(
-      buyNow(wrongPaymentData2, 0),
-      'fee cannot be larger than 100 percent',
+      buyNow(sellerPrivKey, wrongPaymentData2, 0),
+      'fee cannot be larger than maxFeeBPS',
     );
 
     // it finally is accepted
-    await payments.buyNow(paymentData2, signature, { from: paymentData2.buyer, value: paymentData2.amount }).should.be.fulfilled;
+    await payments.buyNow(paymentData2, signature, sigSeller2, { from: paymentData2.buyer, value: paymentData2.amount }).should.be.fulfilled;
   });
 });

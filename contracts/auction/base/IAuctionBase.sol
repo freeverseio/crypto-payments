@@ -84,15 +84,25 @@ interface IAuctionBase is IBuyNowBase, ISignableStructsAuction {
      *  then endsAt is increased by timeToExtend.
      * @param extendableBy The maximum value that endsAt can be increased in an auction
      *  as a result of accumulated late-arriving bids.
+     * @param prevMinIncreasePercentage The previous value of minIncreasePercentage
+     * @param prevTimeToExtend The previous value of timeToExtend
+     * @param prevExtendableBy The previous value of extendableBy
      */
     event DefaultAuctionConfig(
         uint256 minIncreasePercentage,
         uint256 timeToExtend,
-        uint256 extendableBy
+        uint256 extendableBy,
+        uint256 prevMinIncreasePercentage,
+        uint256 prevTimeToExtend,
+        uint256 prevExtendableBy
     );
 
     /**
      * @dev Event emitted on change of the auction configuration settings of a specific universe.
+     *  Note that the previous values emitted correspond to the previous values of the struct
+     *  storing the universe config params; not the params queried by the method universeAuctionConfig,
+     *  which resorts to the default config if the specific universe config is not set. 
+     *  This is to avoid events depending on internal logic, and just keeping track of stored state changes.  
      * @param universeId The id of the universe
      * @param minIncreasePercentage The minimum amount that a new bid needs to increase
      *  above the previous highest bid, expressed as a percentage in Basis Points (BPS).
@@ -101,12 +111,18 @@ interface IAuctionBase is IBuyNowBase, ISignableStructsAuction {
      *  then endsAt is increased by timeToExtend.
      * @param extendableBy The maximum value that endsAt can be increased in an auction
      *  as a result of accumulated late-arriving bids.
-     */
+     * @param prevMinIncreasePercentage The previous value of minIncreasePercentage
+     * @param prevTimeToExtend The previous value of timeToExtend
+     * @param prevExtendableBy The previous value of extendableBy
+    */
     event UniverseAuctionConfig(
         uint256 indexed universeId,
         uint256 minIncreasePercentage,
         uint256 timeToExtend,
-        uint256 extendableBy
+        uint256 extendableBy,
+        uint256 prevMinIncreasePercentage,
+        uint256 prevTimeToExtend,
+        uint256 prevExtendableBy
     );
 
     /**
