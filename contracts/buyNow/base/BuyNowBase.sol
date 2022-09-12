@@ -16,13 +16,19 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
     // the address of the deployed EIP712 verifier contract
     address internal _eip712;
 
-    // a descriptor of the accepted currency (be it native or ERC20)
-    string private _acceptedCurrency;
+    // a human readable long descripton of the accepted currency 
+    // (be it native or ERC20), e.g. "USDC on Polygon PoS"
+    string private _currencyLongDescriptor;
 
     //  the amount of seconds that a payment can remain
     //  in ASSET_TRANSFERRING state without positive
     //  or negative confirmation by the operator
     uint256 internal _paymentWindow;
+
+    //  the max fee (in BPS units) that can be accepted in any payment
+    //  despite operator and buyer having signed a larger amount;
+    //  a value of 10000 BPS would correspond to 100% (no limit at all)
+    uint256 internal _maxFeeBPS;
 
     // whether sellers need to be registered to be able to accept payments
     bool internal _isSellerRegistrationRequired;
@@ -44,10 +50,11 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
     mapping(address => uint256) internal _balanceOf;
 
     constructor(string memory currencyDescriptor, address eip712) {
-        _eip712 = eip712;
-        _acceptedCurrency = currencyDescriptor;
-        _paymentWindow = 30 days;
+        setEIP712(eip712);
+        _currencyLongDescriptor = currencyDescriptor;
+        setPaymentWindow(30 days);
         _isSellerRegistrationRequired = false;
+        setMaxFeeBPS(3000); // 30%
     }
 
     /**
@@ -56,9 +63,9 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
      *  EIP712 spec/code changes in the future
      * @param eip712address The address of the new EIP712 contract.
      */
-    function setEIP712(address eip712address) external onlyOwner {
+    function setEIP712(address eip712address) public onlyOwner {
+        emit EIP712(eip712address, _eip712);
         _eip712 = eip712address;
-        emit EIP712(eip712address);
     }
 
     /**
@@ -67,13 +74,28 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
      *  After this time, the payment moves to FAILED, allowing buyer to withdraw.
      * @param window The amount of time available, in seconds.
      */
-    function setPaymentWindow(uint256 window) external onlyOwner {
+    function setPaymentWindow(uint256 window) public onlyOwner {
         require(
             (window < 60 days) && (window > 3 hours),
             "BuyNowBase::setPaymentWindow: payment window outside limits"
         );
+        emit PaymentWindow(window, _paymentWindow);
         _paymentWindow = window;
-        emit PaymentWindow(window);
+    }
+
+    /**
+     * @notice Sets the max fee (in BPS units) that can be accepted in any payment
+     *  despite operator and buyer having signed a larger amount;
+     *  a value of 10000 BPS would correspond to 100% (no limit at all)
+     * @param feeBPS The new max fee (in BPS units)
+     */
+    function setMaxFeeBPS(uint256 feeBPS) public onlyOwner {
+        require(
+            (feeBPS <= 10000) && (feeBPS >= 0),
+            "BuyNowBase::setMaxFeeBPS: maxFeeBPS outside limits"
+        );
+        emit MaxFeeBPS(feeBPS, _maxFeeBPS);
+        _maxFeeBPS = feeBPS;
     }
 
     /**
@@ -100,8 +122,8 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
 
     /// @inheritdoc IBuyNowBase
     function setOnlyUserCanWithdraw(bool onlyUserCan) external {
+        emit OnlyUserCanWithdraw(msg.sender, onlyUserCan, _onlyUserCanWithdraw[msg.sender]);
         _onlyUserCanWithdraw[msg.sender] = onlyUserCan;
-        emit OnlyUserCanWithdraw(msg.sender, onlyUserCan);
     }
 
     /// @inheritdoc IBuyNowBase
@@ -127,7 +149,7 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
         _finalize(transferResult, operatorSignature);
         // withdrawal cannot fail due to zero balance, since
         // balance has just been increased when finalizing the payment:
-        _withdrawAmount(recipient, _balanceOf[recipient], 0);
+        _withdrawAmount(recipient, _balanceOf[recipient]);
     }
 
     /// @inheritdoc IBuyNowBase
@@ -145,7 +167,7 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
         _refund(paymentId);
         // withdrawal cannot fail due to zero balance, since
         // balance has just been increased when refunding:
-        _withdrawAmount(recipient, _balanceOf[recipient], 0);
+        _withdrawAmount(recipient, _balanceOf[recipient]);
     }
 
     /// @inheritdoc IBuyNowBase
@@ -156,20 +178,15 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
     /// @inheritdoc IBuyNowBase
     function relayedWithdraw(address recipient) external {
         require(
-            !_onlyUserCanWithdraw[recipient],
+            !_onlyUserCanWithdraw[recipient] || (msg.sender == recipient),
             "BuyNowBase::relayedWithdraw: tx sender not authorized to withdraw on recipients behalf"
         );
-        _withdrawAmount(recipient, _balanceOf[recipient], 0);
+        _withdrawAmount(recipient, _balanceOf[recipient]);
     }
 
     /// @inheritdoc IBuyNowBase
     function withdrawAmount(uint256 amount) external {
-        uint256 balance = _balanceOf[msg.sender];
-        require(
-            balance >= amount,
-            "BuyNowBase::withdrawAmount: not enough balance to withdraw specified amount"
-        );
-        _withdrawAmount(msg.sender, amount, balance - amount);
+        _withdrawAmount(msg.sender, amount);
     }
 
     // PRIVATE & INTERNAL FUNCTIONS
@@ -199,9 +216,18 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
      * @param buyNowInp The BuyNowInput struct
      * @param operator The address of the operator of this payment.
      */
-    function _processBuyNow(BuyNowInput calldata buyNowInp, address operator)
-        internal
-    {
+    function _processBuyNow(
+        BuyNowInput calldata buyNowInp,
+        address operator,
+        bytes calldata sellerSignature
+    ) internal {
+        require(
+            IEIP712VerifierBuyNow(_eip712).verifySellerSignature(
+                sellerSignature,
+                buyNowInp
+            ),
+            "BuyNowBase::_processBuyNow: incorrect seller signature"
+        );
         assertBuyNowInputsOK(buyNowInp);
         assertSeparateRoles(operator, buyNowInp.buyer, buyNowInp.seller);
         (uint256 newFundsNeeded, uint256 localFunds) = splitFundingSources(
@@ -213,7 +239,7 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
             State.AssetTransferring,
             buyNowInp.buyer,
             buyNowInp.seller,
-            operator,
+            buyNowInp.universeId,
             universeFeesCollector(buyNowInp.universeId),
             block.timestamp + _paymentWindow,
             buyNowInp.feeBPS,
@@ -257,7 +283,7 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
             IEIP712VerifierBuyNow(_eip712).verifyAssetTransferResult(
                 transferResult,
                 operatorSignature,
-                payment.operator
+                universeOperator(payment.universeId)
             ),
             "BuyNowBase::_finalize: only the operator can sign an assetTransferResult"
         );
@@ -309,25 +335,32 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
      *  to protect against re-entrancy attacks.
      */
     function _withdraw() private {
-        _withdrawAmount(msg.sender, _balanceOf[msg.sender], 0);
+        _withdrawAmount(msg.sender, _balanceOf[msg.sender]);
     }
 
     /**
      * @dev (private) Transfers the specified amount of 
      *  funds in this contract's balanceOf[recipient] to the recipient address.
-     *  The checks that enough amount is available, and the computation
-     *  of the final balance need to be done before calling this function.
      *  Follows standard Checks-Effects-Interactions pattern
      *  to protect against re-entrancy attacks.
      * @param recipient The address of to transfer funds from the local contract
      * @param amount The amount to withdraw.
-     * @param finalBalance The final balance of msg.sender after withdrawal.
     */
-    function _withdrawAmount(address recipient, uint256 amount, uint256 finalBalance) private {
-        // requirement:
-        require(amount > 0, "BuyNowBase::_withdrawAmount: cannot withdraw zero amount");
+    function _withdrawAmount(address recipient, uint256 amount) private {
+        // requirements: 
+        //  1. check that there is enough balance
+        uint256 currentBalance = _balanceOf[recipient];
+        require(
+            currentBalance >= amount,
+            "BuyNowBase::_withdrawAmount: not enough balance to withdraw specified amount"
+        );
+        //  2. prevent dummy withdrawals with 0 amount to avoid useless events 
+        require(
+            amount > 0,
+            "BuyNowBase::_withdrawAmount: cannot withdraw zero amount"
+        );
         // effect:
-        _balanceOf[recipient] = finalBalance;
+        _balanceOf[recipient] = currentBalance - amount;
         // interaction:
         _transfer(recipient, amount);
         emit Withdraw(recipient, amount);
@@ -391,8 +424,13 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
     }
 
     /// @inheritdoc IBuyNowBase
-    function acceptedCurrency() external view returns (string memory) {
-        return _acceptedCurrency;
+    function maxFeeBPS() external view returns (uint256) {
+        return _maxFeeBPS;
+    }
+
+    /// @inheritdoc IBuyNowBase
+    function currencyLongDescriptor() external view returns (string memory) {
+        return _currencyLongDescriptor;
     }
 
     /// @inheritdoc IBuyNowBase
@@ -402,8 +440,8 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
             "BuyNowBase::assertBuyNowInputsOK: payment amount cannot be zero"
         );
         require(
-            buyNowInp.feeBPS <= 10000,
-            "BuyNowBase::assertBuyNowInputsOK: fee cannot be larger than 100 percent"
+            buyNowInp.feeBPS <= _maxFeeBPS,
+            "BuyNowBase::assertBuyNowInputsOK: fee cannot be larger than maxFeeBPS"
         );
         require(
             paymentState(buyNowInp.paymentId) == State.NotStarted,

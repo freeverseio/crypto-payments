@@ -6,7 +6,7 @@ const truffleAssert = require('truffle-assertions');
 const ethSigUtil = require('eth-sig-util');
 const { prepareDataToSignBid, prepareDataToSignAssetTransfer } = require('../helpers/signer');
 const {
-  fromHexString, toBN, provideFunds, registerAccountInLocalTestnet, getGasFee, assertBalances,
+  fromHexString, toBN, provideFunds, registerAccountInLocalTestnet, getGasFee, assertBalances, addressFromPk, generateSellerSig,
 } = require('../helpers/utils');
 const { TimeTravel } = require('../helpers/TimeTravel');
 
@@ -26,12 +26,18 @@ contract('AuctionNative2', (accounts) => {
   const enoughPercent = 1.06; // 6%
   const defaultTimeToExtend = 10 * 60; // 10 min
   const defaultExtendableBy = 24 * 3600; // 1 day
-  const [deployer, alice, bob, carol] = accounts;
+  const [deployer, aliceSister, bobSister, carol] = accounts;
   const feesCollector = carol;
+  const sellerPrivKey = '0x4f3edf983ac636a65a842ce7c78d9aa706d3b113bce9c46f30d7d21715b23b1d';
   const buyerPrivKey = '0x3B878F7892FBBFA30C8AED1DF317C19B853685E707C2CF0EE1927DC516060A54';
   const operatorPrivKey = '0x4A878F7892FBBFA30C8AED1DF317C19B853685E707C2CF0EE1927DC516060A54';
+  const bobPrivKey = '0xe485d098507f54e7733a205420dfddbe58db035fa577fc294ebd14db90767a52';
+  const sellerAccount = web3.eth.accounts.privateKeyToAccount(sellerPrivKey);
   const buyerAccount = web3.eth.accounts.privateKeyToAccount(buyerPrivKey);
   const operatorAccount = web3.eth.accounts.privateKeyToAccount(operatorPrivKey);
+  const bobAccount = web3.eth.accounts.privateKeyToAccount(bobPrivKey);
+  const alice = sellerAccount.address;
+  const bob = bobAccount.address;
   const operator = operatorAccount.address;
   const dummySignature = '0x009a76c8f1c6f4286eb295ddc60d1fbe306880cbc5d36178c67e97d4993d6bfc112c56ff9b4d988af904cd107cdcc61f11461d6a436e986b665bb88e1b6d32c81c';
   const defaultAmount = 300;
@@ -54,6 +60,7 @@ contract('AuctionNative2', (accounts) => {
   const initialBuyerETH = 1000000000000000000;
   const initialOperatorETH = 6000000000000000000;
   const timeTravel = new TimeTravel(web3);
+  const minimalSupply = Math.round(Number(initialBuyerETH) / 10);
 
   let eip712;
   let payments;
@@ -69,9 +76,13 @@ contract('AuctionNative2', (accounts) => {
       defaultTimeToExtend,
       defaultExtendableBy,
     ).should.be.fulfilled;
+    await registerAccountInLocalTestnet(sellerAccount).should.be.fulfilled;
     await registerAccountInLocalTestnet(buyerAccount).should.be.fulfilled;
     await registerAccountInLocalTestnet(operatorAccount).should.be.fulfilled;
+    await registerAccountInLocalTestnet(bobAccount).should.be.fulfilled;
     await provideFunds(deployer, operator, initialOperatorETH);
+    await provideFunds(deployer, bob, minimalSupply);
+    await provideFunds(deployer, bidData.seller, minimalSupply);
     await payments.setUniverseOperator(
       bidData.universeId,
       operator,
@@ -110,7 +121,7 @@ contract('AuctionNative2', (accounts) => {
   // otherwise it provides _bidData.bidAmount;
   // this is useful when the user already have funds in the contract
   // and just needs an amount less than bidAmount to be provided.
-  async function bid(_bidData, _ETHSupplyForBuyer, _txAmount) {
+  async function bid(_sellerPrivKey, _bidData, _ETHSupplyForBuyer, _txAmount) {
     await provideFunds(deployer, _bidData.bidder, _ETHSupplyForBuyer);
 
     // Operator signs purchase
@@ -122,24 +133,13 @@ contract('AuctionNative2', (accounts) => {
         contractAddress: eip712.address,
       }),
     );
+    const sigSeller = generateSellerSig(_sellerPrivKey, _bidData.paymentId);
 
     // Pay
     const value = _txAmount >= 0 ? _txAmount : _bidData.bidAmount;
-    const receipt = await payments.bid(_bidData, signature, { from: _bidData.bidder, value });
+    const receipt = await payments.bid(_bidData, signature, sigSeller, { from: _bidData.bidder, value });
     const gasFee = getGasFee(receipt);
     return { signature, gasFee };
-  }
-
-  async function assertBalances(_contract, addresses, amounts) {
-    for (let i = 0; i < addresses.length; i += 1) {
-      if (_contract === 'native') {
-        // eslint-disable-next-line no-await-in-loop
-        assert.equal(String(await web3.eth.getBalance(addresses[i])), String(amounts[i]));
-      } else {
-        // eslint-disable-next-line no-await-in-loop
-        assert.equal(String(await _contract.balanceOf(addresses[i])), String(amounts[i]));
-      }
-    }
   }
 
   it('From PAID: seller can withdraw, all balances work as expected', async () => {
@@ -165,7 +165,7 @@ contract('AuctionNative2', (accounts) => {
     // After payment has arrived, the amount has been subtracted from native coin balances
     // in favour of the payments contract address. However, the balances in the
     // payments local address remain 0 until the payment moves to PAID or refunds take place.
-    const { gasFee } = await bid(bidData, initialBuyerETH);
+    const { gasFee } = await bid(sellerPrivKey, bidData, initialBuyerETH);
 
     expectedNativeBuyer.iadd(toBN(initialBuyerETH))
       .isub(toBN(bidData.bidAmount))
@@ -263,9 +263,9 @@ contract('AuctionNative2', (accounts) => {
     const expectedNativeBob = toBN(await web3.eth.getBalance(bob));
 
     // We will do 2 payments with equal seller, and 1 with a different seller (Bob)
-    await bid(bidData, initialBuyerETH);
-    await bid(bidData2, initialBuyerETH);
-    await bid(paymentData3, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, initialBuyerETH);
+    await bid(sellerPrivKey, bidData2, initialBuyerETH);
+    await bid(bobPrivKey, paymentData3, initialBuyerETH);
 
     await timeTravel.waitUntil(endsAt + 30);
     await finalize(bidData.paymentId, true, operatorPrivKey);
@@ -308,7 +308,7 @@ contract('AuctionNative2', (accounts) => {
       [expectedNativeContract, expectedNativeSeller, expectedNativeBidder1, expectedNativeBidder2, expectedNativeFeesCollector],
     );
 
-    const { gasFee } = await bid(bidData, initialBuyerETH);
+    const { gasFee } = await bid(sellerPrivKey, bidData, initialBuyerETH);
 
     expectedNativeBidder1.iadd(toBN(initialBuyerETH - bidData.bidAmount)).isub(gasFee);
     expectedNativeContract.iadd(toBN(bidData.bidAmount));
@@ -319,7 +319,7 @@ contract('AuctionNative2', (accounts) => {
       [expectedNativeContract, expectedNativeSeller, expectedNativeBidder1, expectedNativeBidder2, expectedNativeFeesCollector],
     );
 
-    const { gasFee: gasFee2 } = await bid(bidData2, 0);
+    const { gasFee: gasFee2 } = await bid(sellerPrivKey, bidData2, 0);
 
     expectedNativeBidder2.isub(toBN(bidData2.bidAmount)).isub(gasFee2);
     expectedNativeContract.iadd(toBN(bidData2.bidAmount));
@@ -355,7 +355,7 @@ contract('AuctionNative2', (accounts) => {
     bidData2.seller = thisBidder;
     bidData2.bidder = carol;
 
-    await bid(bidData2, initialBuyerETH);
+    await bid(buyerPrivKey, bidData2, initialBuyerETH);
 
     await timeTravel.waitUntil(endsAt + 30);
     await finalize(bidData2.paymentId, true, operatorPrivKey);
@@ -394,7 +394,7 @@ contract('AuctionNative2', (accounts) => {
     assert.equal(split.isSameBidder, false);
 
     // bidder is able to bid without adding new funds
-    const { gasFee: gasFee1 } = await bid(bidData3, initialBuyerETH, 0);
+    const { gasFee: gasFee1 } = await bid(sellerPrivKey, bidData3, initialBuyerETH, 0);
 
     // bidder just notices that there are less funds to withdraw
     expectedBidderLocalBalance.isub(toBN(bidData3.bidAmount));
@@ -412,7 +412,7 @@ contract('AuctionNative2', (accounts) => {
     // the outbid is by 300 (newBid) - 10 (prevBid) = 290.
     // since bidder already has 275 in the local balance,
     // she needs to provide only 290 - 275 = 15
-    const { gasFee: gasFee2 } = await bid(bidData4, 0, 15);
+    const { gasFee: gasFee2 } = await bid(sellerPrivKey, bidData4, 0, 15);
 
     // local balance of bidder is now 0
     expectedBidderLocalBalance.isub(expectedBidderLocalBalance);
@@ -454,7 +454,7 @@ contract('AuctionNative2', (accounts) => {
     const bidData0 = JSON.parse(JSON.stringify(bidData));
     bidData0.bidAmount = 100;
 
-    await bid(bidData0, initialBuyerETH);
+    await bid(sellerPrivKey, bidData0, initialBuyerETH);
     assert.equal(await payments.paymentState(bidData0.paymentId), AUCTIONING);
 
     const bidData2 = JSON.parse(JSON.stringify(bidData0));
@@ -463,17 +463,17 @@ contract('AuctionNative2', (accounts) => {
 
     // Try to place another bid with non-agreed feeBPS
     bidData2.feeBPS = 4132;
-    await bid(bidData2, 0, bidIncrease).should.be.fulfilled;
+    await bid(sellerPrivKey, bidData2, 0, bidIncrease).should.be.fulfilled;
 
     // Try to place another bid with endsAt beyond extendableBy
     bidData2.bidAmount += bidIncrease;
     bidData2.endsAt = bidData0.endsAt + defaultExtendableBy + 1;
-    await bid(bidData2, 0, bidIncrease).should.be.fulfilled;
+    await bid(sellerPrivKey, bidData2, 0, bidIncrease).should.be.fulfilled;
   });
 
   it('If Bidder increases own bid, only the diff needed must be provided', async () => {
     await payments.registerAsSeller({ from: bidData.seller }).should.be.fulfilled;
-    await bid(bidData, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, initialBuyerETH);
 
     const bidData2 = JSON.parse(JSON.stringify(bidData));
     bidData2.bidAmount = Math.floor(enoughPercent * bidData.bidAmount);
@@ -481,18 +481,18 @@ contract('AuctionNative2', (accounts) => {
 
     // Cannot provide more than bidAmount
     await truffleAssert.reverts(
-      bid(bidData2, initialBuyerETH, bidData2.bidAmount + 1),
+      bid(sellerPrivKey, bidData2, initialBuyerETH, bidData2.bidAmount + 1),
       'new funds provided must be less than bid amount',
     );
     // Cannot provide less than required
     await truffleAssert.reverts(
-      bid(bidData2, initialBuyerETH, newFundsNeeded - 1),
+      bid(sellerPrivKey, bidData2, initialBuyerETH, newFundsNeeded - 1),
       'new funds provided are not within required range',
     );
 
     // possible to pay just the bare minimum, with no localBalance afterwards:
     const snapshot2 = await timeTravel.takeSnapshot();
-    await bid(bidData2, initialBuyerETH, newFundsNeeded);
+    await bid(sellerPrivKey, bidData2, initialBuyerETH, newFundsNeeded);
     await assertBalances(
       payments,
       [bidData2.bidder],
@@ -501,7 +501,7 @@ contract('AuctionNative2', (accounts) => {
     await timeTravel.revertToSnapShot(snapshot2.result);
 
     // possible to pay some excess, with local balance afterwards
-    await bid(bidData2, initialBuyerETH, newFundsNeeded + 22);
+    await bid(sellerPrivKey, bidData2, initialBuyerETH, newFundsNeeded + 22);
     await assertBalances(
       payments,
       [bidData2.bidder],
@@ -511,27 +511,27 @@ contract('AuctionNative2', (accounts) => {
 
   it('Bid must be some percentage larger than previous highest bid', async () => {
     await payments.registerAsSeller({ from: bidData.seller }).should.be.fulfilled;
-    await bid(bidData, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, initialBuyerETH);
 
     // try to bid again
     await truffleAssert.reverts(
-      bid(bidData, initialBuyerETH),
+      bid(sellerPrivKey, bidData, initialBuyerETH),
       'bid needs to be larger than previous bid by a certain percentage.',
     );
     const bidData2 = JSON.parse(JSON.stringify(bidData));
     bidData2.bidder = carol;
     bidData2.bidAmount = Math.floor(notEnoughPercent * bidData.bidAmount);
     await truffleAssert.reverts(
-      bid(bidData2, initialBuyerETH),
+      bid(sellerPrivKey, bidData2, initialBuyerETH),
       'bid needs to be larger than previous bid by a certain percentage.',
     );
     bidData2.bidAmount = Math.floor(enoughPercent * bidData.bidAmount);
-    await bid(bidData2, initialBuyerETH);
+    await bid(sellerPrivKey, bidData2, initialBuyerETH);
   });
 
   it('From PAID: no further action is accepted', async () => {
     await payments.registerAsSeller({ from: bidData.seller }).should.be.fulfilled;
-    await bid(bidData, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, initialBuyerETH);
     await timeTravel.waitUntil(endsAt + 30);
     await finalize(bidData.paymentId, true, operatorPrivKey);
     // try assetTransferSuccess
@@ -549,7 +549,7 @@ contract('AuctionNative2', (accounts) => {
     bidData2.bidder = operatorAccount.address;
     bidData2.bidAmount = Math.floor(enoughPercent * bidData.bidAmount);
     await truffleAssert.reverts(
-      bid(bidData2, initialBuyerETH),
+      bid(sellerPrivKey, bidData2, initialBuyerETH),
       'bids are only accepted if state is either NOT_STARTED or AUCTIONING',
     );
   });
@@ -580,7 +580,7 @@ contract('AuctionNative2', (accounts) => {
     // After payment has arrived, the amount has been subtracted from the external balance
     // in favour of the payments contract address. However, the balances in the
     // payments local address remain 0 until the payment moves to PAID or refunds take place.
-    const { gasFee } = await bid(bidData, initialBuyerETH);
+    const { gasFee } = await bid(sellerPrivKey, bidData, initialBuyerETH);
 
     expectedNativeBuyer.iadd(toBN(initialBuyerETH))
       .isub(toBN(bidData.bidAmount))
@@ -662,7 +662,7 @@ contract('AuctionNative2', (accounts) => {
     // After payment has arrived, the amount has been subtracted from the external balance
     // in favour of the payments contract address. However, the balances in the
     // payments local address remain 0 until the payment moves to PAID or refunds take place.
-    const { gasFee } = await bid(bidData, initialBuyerETH);
+    const { gasFee } = await bid(sellerPrivKey, bidData, initialBuyerETH);
 
     expectedNativeBuyer.iadd(toBN(initialBuyerETH))
       .isub(toBN(bidData.bidAmount))
@@ -685,7 +685,7 @@ contract('AuctionNative2', (accounts) => {
 
     // Let's move to FAILED implicitly, by going beyond expiration time:
     const paymentWindow = await payments.paymentWindow();
-    await timeTravel.waitUntil(endsAt + Number(paymentWindow) + 10);
+    await timeTravel.waitUntil(endsAt + defaultExtendableBy + Number(paymentWindow) + 10);
 
     assert.equal(await payments.paymentState(bidData.paymentId), ASSET_TRANSFERRING);
 
@@ -731,7 +731,7 @@ contract('AuctionNative2', (accounts) => {
 
   it('finalize: only operator is authorized to sign', async () => {
     await payments.registerAsSeller({ from: bidData.seller }).should.be.fulfilled;
-    await bid(bidData, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, initialBuyerETH);
     await timeTravel.waitUntil(endsAt + 30);
     assert.equal(await payments.paymentState(bidData.paymentId), ASSET_TRANSFERRING);
     await truffleAssert.reverts(
@@ -746,7 +746,7 @@ contract('AuctionNative2', (accounts) => {
 
   it('ASSET_TRANSFERRING moves to PAID when someone relays operator confirmation of asset transfer success', async () => {
     await payments.registerAsSeller({ from: bidData.seller }).should.be.fulfilled;
-    await bid(bidData, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, initialBuyerETH);
     await timeTravel.waitUntil(endsAt + 30);
     assert.equal(await payments.paymentState(bidData.paymentId), ASSET_TRANSFERRING);
     await finalize(bidData.paymentId, true, operatorPrivKey);
@@ -768,7 +768,7 @@ contract('AuctionNative2', (accounts) => {
 
   it('ASSET_TRANSFERRING moves to REFUNDED when someone realays operator confirmation of asset transfer failed', async () => {
     await payments.registerAsSeller({ from: bidData.seller }).should.be.fulfilled;
-    await bid(bidData, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, initialBuyerETH);
     await timeTravel.waitUntil(endsAt + 30);
     assert.equal(await payments.paymentState(bidData.paymentId), ASSET_TRANSFERRING);
     await finalize(bidData.paymentId, false, operatorPrivKey);
@@ -797,14 +797,14 @@ contract('AuctionNative2', (accounts) => {
 
   it('ASSET_TRANSFERRING allows ACCEPTS_REFUND after expiration time', async () => {
     await payments.registerAsSeller({ from: bidData.seller }).should.be.fulfilled;
-    await bid(bidData, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, initialBuyerETH);
 
     await timeTravel.waitUntil(endsAt + 30);
     assert.equal(await payments.paymentState(bidData.paymentId), ASSET_TRANSFERRING);
 
     // wait just before expiration time, and check that state has not changed yet
     const paymentWindow = await payments.paymentWindow();
-    await timeTravel.waitUntil(endsAt + Number(paymentWindow) - 100);
+    await timeTravel.waitUntil(endsAt + defaultExtendableBy + Number(paymentWindow) - 100);
     assert.equal(await payments.acceptsRefunds(bidData.paymentId), false);
 
     // wait the remainder period to get beyond expiration time,
@@ -819,13 +819,13 @@ contract('AuctionNative2', (accounts) => {
 
     const expectedNativeBuyer = toBN(await web3.eth.getBalance(bidData.bidder));
 
-    const { gasFee } = await bid(bidData, initialBuyerETH);
+    const { gasFee } = await bid(sellerPrivKey, bidData, initialBuyerETH);
     await timeTravel.waitUntil(endsAt + 10);
     assert.equal(await payments.paymentState(bidData.paymentId), ASSET_TRANSFERRING);
 
     // wait beyond payment window to move to FAILED
     const paymentWindow = await payments.paymentWindow();
-    await timeTravel.wait(Number(paymentWindow) + 5);
+    await timeTravel.wait(defaultExtendableBy + Number(paymentWindow) + 5);
     assert.equal(await payments.acceptsRefunds(bidData.paymentId), true);
     // Check expected external balance of buyer before refunding:
     expectedNativeBuyer.iadd(toBN(initialBuyerETH))
@@ -847,21 +847,21 @@ contract('AuctionNative2', (accounts) => {
 
   it('ASSET_TRANSFERRING blocks another Bid', async () => {
     await payments.registerAsSeller({ from: bidData.seller }).should.be.fulfilled;
-    await bid(bidData, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, initialBuyerETH);
     await timeTravel.waitUntil(endsAt + 10);
     assert.equal(await payments.paymentState(bidData.paymentId), ASSET_TRANSFERRING);
     const bidData2 = JSON.parse(JSON.stringify(bidData));
     bidData2.bidder = operatorAccount.address;
     bidData2.bidAmount = 2 * bidData.bidAmount;
     await truffleAssert.reverts(
-      bid(bidData2, initialBuyerETH),
+      bid(sellerPrivKey, bidData2, initialBuyerETH),
       'bids are only accepted if state is either NOT_STARTED or AUCTIONING',
     );
   });
 
   it('ASSET_TRANSFERRING blocks refund', async () => {
     await payments.registerAsSeller({ from: bidData.seller }).should.be.fulfilled;
-    await bid(bidData, initialBuyerETH);
+    await bid(sellerPrivKey, bidData, initialBuyerETH);
     await timeTravel.waitUntil(endsAt + 10);
     assert.equal(await payments.paymentState(bidData.paymentId), ASSET_TRANSFERRING);
     await truffleAssert.reverts(
@@ -885,12 +885,13 @@ contract('AuctionNative2', (accounts) => {
 
     // fails unless registration is not required:
     assert.equal(await payments.isRegisteredSeller(bidData.seller), false);
+    const sigSeller = generateSellerSig(sellerPrivKey, bidData.paymentId);
     await truffleAssert.reverts(
-      payments.bid(bidData, signature, { from: bidData.bidder, value: bidData.bidAmount }),
+      payments.bid(bidData, signature, sigSeller, { from: bidData.bidder, value: bidData.bidAmount }),
       'seller not registered',
     );
     await payments.setIsSellerRegistrationRequired(false, { from: deployer }).should.be.fulfilled;
-    await payments.bid(bidData, signature, { from: bidData.bidder, value: bidData.bidAmount }).should.be.fulfilled;
+    await payments.bid(bidData, signature, sigSeller, { from: bidData.bidder, value: bidData.bidAmount }).should.be.fulfilled;
   });
 
   it('Bid requirements are correctly checked', async () => {
@@ -908,13 +909,14 @@ contract('AuctionNative2', (accounts) => {
     await provideFunds(deployer, bidData2.bidder, initialBuyerETH);
 
     // should fail unless the buyer is the sender of the TX
+    const sigSeller = generateSellerSig(sellerPrivKey, bidData2.paymentId);
     await truffleAssert.reverts(
-      payments.bid(bidData2, dummySignature, { from: operator, value: bidData2.bidAmount }),
+      payments.bid(bidData2, dummySignature, sigSeller, { from: operator, value: bidData2.bidAmount }),
       'only bidder can execute this function',
     );
 
     await truffleAssert.fails(
-      payments.bid(bidData2, dummySignature, { from: bidData2.bidder, value: bidData2.bidAmount }),
+      payments.bid(bidData2, dummySignature, sigSeller, { from: bidData2.bidder, value: bidData2.bidAmount }),
       'incorrect operator signature',
     );
 
@@ -929,7 +931,7 @@ contract('AuctionNative2', (accounts) => {
 
     // should fail due to not enough funds
     await truffleAssert.fails(
-      payments.bid(bidData2, signature, { from: bidData2.bidder, value: bidData2.bidAmount }),
+      payments.bid(bidData2, signature, sigSeller, { from: bidData2.bidder, value: bidData2.bidAmount }),
       'seller not registered',
     );
 
@@ -939,16 +941,16 @@ contract('AuctionNative2', (accounts) => {
     const wrongPaymentData2 = JSON.parse(JSON.stringify(bidData2));
     wrongPaymentData2.feeBPS = 10100;
     await truffleAssert.fails(
-      bid(wrongPaymentData2, 0),
-      'fee cannot be larger than 100 percent',
+      bid(sellerPrivKey, wrongPaymentData2, 0),
+      'fee cannot be larger than maxFeeBPS',
     );
 
     // fails due to insufficient funds:
-    await payments.bid(bidData2, signature, { from: bidData2.bidder, value: bidData2.bidAmount }).should.be.rejected;
+    await payments.bid(bidData2, signature, sigSeller, { from: bidData2.bidder, value: bidData2.bidAmount }).should.be.rejected;
 
     await provideFunds(deployer, bidData2.bidder, initialBuyerETH);
 
     // it finally is accepted
-    await payments.bid(bidData2, signature, { from: bidData2.bidder, value: bidData2.bidAmount }).should.be.fulfilled;
+    await payments.bid(bidData2, signature, sigSeller, { from: bidData2.bidder, value: bidData2.bidAmount }).should.be.fulfilled;
   });
 });

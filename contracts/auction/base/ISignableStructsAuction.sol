@@ -19,7 +19,8 @@ interface ISignableStructsAuction {
     struct BidInput {
         // the unique Id that identifies a payment process,
         // common to both Auctions and BuyNows,
-        // obtained from a sufficiently large source of entropy.
+        // obtained from hashing params related to the listing, 
+        // including a sufficiently large source of entropy.
         bytes32 paymentId;
 
         // the time at which the auction ends if
