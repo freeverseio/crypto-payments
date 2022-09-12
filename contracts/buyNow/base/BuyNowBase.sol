@@ -16,8 +16,9 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
     // the address of the deployed EIP712 verifier contract
     address internal _eip712;
 
-    // a descriptor of the accepted currency (be it native or ERC20)
-    string private _acceptedCurrency;
+    // a human readable long descripton of the accepted currency 
+    // (be it native or ERC20), e.g. "USDC on Polygon PoS"
+    string private _currencyLongDescriptor;
 
     //  the amount of seconds that a payment can remain
     //  in ASSET_TRANSFERRING state without positive
@@ -50,7 +51,7 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
 
     constructor(string memory currencyDescriptor, address eip712) {
         setEIP712(eip712);
-        _acceptedCurrency = currencyDescriptor;
+        _currencyLongDescriptor = currencyDescriptor;
         setPaymentWindow(30 days);
         _isSellerRegistrationRequired = false;
         setMaxFeeBPS(3000); // 30%
@@ -215,9 +216,18 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
      * @param buyNowInp The BuyNowInput struct
      * @param operator The address of the operator of this payment.
      */
-    function _processBuyNow(BuyNowInput calldata buyNowInp, address operator)
-        internal
-    {
+    function _processBuyNow(
+        BuyNowInput calldata buyNowInp,
+        address operator,
+        bytes calldata sellerSignature
+    ) internal {
+        require(
+            IEIP712VerifierBuyNow(_eip712).verifySellerSignature(
+                sellerSignature,
+                buyNowInp
+            ),
+            "BuyNowBase::_processBuyNow: incorrect seller signature"
+        );
         assertBuyNowInputsOK(buyNowInp);
         assertSeparateRoles(operator, buyNowInp.buyer, buyNowInp.seller);
         (uint256 newFundsNeeded, uint256 localFunds) = splitFundingSources(
@@ -419,8 +429,8 @@ abstract contract BuyNowBase is IBuyNowBase, FeesCollectors, Operators {
     }
 
     /// @inheritdoc IBuyNowBase
-    function acceptedCurrency() external view returns (string memory) {
-        return _acceptedCurrency;
+    function currencyLongDescriptor() external view returns (string memory) {
+        return _currencyLongDescriptor;
     }
 
     /// @inheritdoc IBuyNowBase
