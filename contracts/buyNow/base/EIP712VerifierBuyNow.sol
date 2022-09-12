@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/utils/cryptography/draft-EIP712.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 /**
- * @title Verification of MetaTXs for BuyNows using EIP712.
+ * @title Verification of MetaTXs for BuyNows.
  * @author Freeverse.io, www.freeverse.io
  * @notice Full contract documentation in IEIP712VerifierBuyNow
  */
@@ -51,5 +51,18 @@ contract EIP712VerifierBuyNow is IEIP712VerifierBuyNow, EIP712 {
             )
         ).recover(signature);
         return signer == recoveredSigner;
+    }
+
+    /// @inheritdoc IEIP712VerifierBuyNow
+    function verifySellerSignature(
+        bytes calldata sellerSignature,
+        BuyNowInput calldata buyNowInp
+    ) public pure returns (bool) {
+        /*
+         * @dev The sellerSignature is also required off-chain (in the L2) to initiate the listing;
+         *  in the L2, 'paymentId' is basically the digest of all listing extended set of params,
+         *  so in the current implementation, the code basically has to check that the seller signed 'paymentId'.
+        */
+        return buyNowInp.seller == buyNowInp.paymentId.toEthSignedMessageHash().recover(sellerSignature);
     }
 }

@@ -6,7 +6,7 @@ const truffleAssert = require('truffle-assertions');
 const ethSigUtil = require('eth-sig-util');
 const { prepareDataToSignBuyNow, prepareDataToSignAssetTransfer } = require('../helpers/signer');
 const {
-  fromHexString, toBN, provideFunds, registerAccountInLocalTestnet, getGasFee, assertBalances,
+  fromHexString, toBN, provideFunds, registerAccountInLocalTestnet, getGasFee, assertBalances, addressFromPk, generateSellerSig,
 } = require('../helpers/utils');
 const { TimeTravel } = require('../helpers/TimeTravel');
 
@@ -22,13 +22,19 @@ contract('BuyNowERC20_2', (accounts) => {
   // eslint-disable-next-line no-unused-vars
   const it2 = async (text, f) => {};
   const CURRENCY_DESCRIPTOR = 'SUPER COIN';
-  const [deployer, alice, bob] = accounts;
+  const [deployer] = accounts;
   const feesCollector = deployer;
+  const sellerPrivKey = '0x4f3edf983ac636a65a842ce7c78d9aa706d3b113bce9c46f30d7d21715b23b1d';
   const buyerPrivKey = '0x3B878F7892FBBFA30C8AED1DF317C19B853685E707C2CF0EE1927DC516060A54';
   const operatorPrivKey = '0x4A878F7892FBBFA30C8AED1DF317C19B853685E707C2CF0EE1927DC516060A54';
+  const bobPrivKey = '0xe485d098507f54e7733a205420dfddbe58db035fa577fc294ebd14db90767a52';
+  const sellerAccount = web3.eth.accounts.privateKeyToAccount(sellerPrivKey);
   const buyerAccount = web3.eth.accounts.privateKeyToAccount(buyerPrivKey);
   const operatorAccount = web3.eth.accounts.privateKeyToAccount(operatorPrivKey);
+  const bobAccount = web3.eth.accounts.privateKeyToAccount(bobPrivKey);
+  const alice = sellerAccount.address;
   const operator = operatorAccount.address;
+  const bob = bobAccount.address;
   const name = 'MYERC20';
   const symbol = 'FV20';
   const dummySignature = '0x009a76c8f1c6f4286eb295ddc60d1fbe306880cbc5d36178c67e97d4993d6bfc112c56ff9b4d988af904cd107cdcc61f11461d6a436e986b665bb88e1b6d32c81c';
@@ -52,6 +58,7 @@ contract('BuyNowERC20_2', (accounts) => {
   const initialBuyerETH = 1000000000000000000;
   const initialOperatorETH = 6000000000000000000;
   const timeTravel = new TimeTravel(web3);
+  const minimalSupply = Math.round(Number(initialBuyerETH) / 10);
 
   let erc20;
   let eip712;
@@ -67,10 +74,14 @@ contract('BuyNowERC20_2', (accounts) => {
       CURRENCY_DESCRIPTOR,
       eip712.address,
     ).should.be.fulfilled;
+    await registerAccountInLocalTestnet(sellerAccount).should.be.fulfilled;
     await registerAccountInLocalTestnet(buyerAccount).should.be.fulfilled;
     await registerAccountInLocalTestnet(operatorAccount).should.be.fulfilled;
+    await registerAccountInLocalTestnet(bobAccount).should.be.fulfilled;
     await erc20.transfer(operator, initialOperatorERC20, { from: deployer });
     await provideFunds(deployer, operator, initialOperatorETH);
+    await provideFunds(deployer, bob, minimalSupply);
+    await provideFunds(deployer, paymentData.seller, minimalSupply);
     await payments.setUniverseOperator(
       paymentData.universeId,
       operator,
@@ -105,7 +116,7 @@ contract('BuyNowERC20_2', (accounts) => {
 
   // Executes a relayedPayment. Reused by many tests.
   // It first funds the buyer, then buyer approves, signs, and the operator relays the payment.
-  async function relayedBuyNow(_paymentData, _ERC20SupplyForBuyer, _ETHSupplyForBuyer, _operator) {
+  async function relayedBuyNow(_sellerPrivKey, _paymentData, _ERC20SupplyForBuyer, _ETHSupplyForBuyer, _operator) {
     // Prepare Carol to be a buyer: fund her with ERC20, with ETH, and register her as seller
     await erc20.transfer(_paymentData.buyer, _ERC20SupplyForBuyer, { from: _operator });
     await provideFunds(_operator, buyerAccount.address, _ETHSupplyForBuyer);
@@ -117,30 +128,35 @@ contract('BuyNowERC20_2', (accounts) => {
     const sigOperator = await signEIP712(operatorPrivKey, prepareDataToSignBuyNow, _paymentData, true);
 
     // Pay
-    await payments.relayedBuyNow(_paymentData, sigBuyer, sigOperator, { from: _operator });
+    const sigSeller = generateSellerSig(_sellerPrivKey, _paymentData.paymentId);
+
+    // prepare seller to be a seller
+    await payments.relayedBuyNow(_paymentData, sigBuyer, sigOperator, sigSeller, { from: _operator });
   }
 
   // Executes a Payment directly by buyer. Reused by many tests.
   // It first funds the buyer, then buyer approves, operators signs,
   // and the buyer relays the payment.
-  async function buyNow(_paymentData, _ERC20SupplyForBuyer, _ETHSupplyForBuyer) {
+  async function buyNow(_sellerPrivKey, _paymentData, _ERC20SupplyForBuyer, _ETHSupplyForBuyer) {
     // Prepare Carol to be a buyer: fund her with ERC20, with ETH, and register her as seller
     await erc20.transfer(_paymentData.buyer, _ERC20SupplyForBuyer, { from: deployer });
     await provideFunds(deployer, buyerAccount.address, _ETHSupplyForBuyer);
 
     // Buyer approves purchase allowance
-    await erc20.approve(payments.address, _paymentData.amount, { from: _paymentData.buyer }).should.be.fulfilled;
+    await erc20.approve(payments.address, _paymentData.amount, { from: _paymentData.buyer });
 
     // Operator signs purchase
     const signature = await signEIP712(operatorPrivKey, prepareDataToSignBuyNow, _paymentData, true);
 
     // Pay
-    await payments.buyNow(_paymentData, signature, { from: _paymentData.buyer });
+    const sigSeller = generateSellerSig(_sellerPrivKey, _paymentData.paymentId);
+
+    await payments.buyNow(_paymentData, signature, sigSeller, { from: _paymentData.buyer });
     return signature;
   }
 
   it('Events are emitted in a direct buyNow', async () => {
-    await buyNow(paymentData, initialBuyerERC20, initialBuyerETH);
+    await buyNow(sellerPrivKey, paymentData, initialBuyerERC20, initialBuyerETH);
     const past = await payments.getPastEvents('BuyNow', { fromBlock: 0, toBlock: 'latest' }).should.be.fulfilled;
     assert.equal(past[0].args.paymentId, paymentData.paymentId);
     assert.equal(past[0].args.buyer, paymentData.buyer);
@@ -178,7 +194,7 @@ contract('BuyNowERC20_2', (accounts) => {
     // After payment has arrived, the amount has been subtracted from the ERC20 contract
     // in favour of the payments contract address. However, the balances in the
     // payments local address remain 0 until the payment moves to PAID or refunds take place.
-    await relayedBuyNow(paymentData, initialBuyerERC20, initialBuyerETH, operator);
+    await relayedBuyNow(sellerPrivKey, paymentData, initialBuyerERC20, initialBuyerETH, operator);
 
     expectedERC20Buyer.iadd(toBN(initialBuyerERC20 - paymentData.amount));
     expectedERC20Operator.isub(toBN(initialBuyerERC20));
@@ -260,16 +276,15 @@ contract('BuyNowERC20_2', (accounts) => {
 
   it('Repeated payments lead to addition of funds', async () => {
     const expectedERC20FeesCollector = await erc20.balanceOf(feesCollector);
-
     // We will do 2 payments with equal seller, and 1 with a different seller (Bob)
-    await relayedBuyNow(paymentData, initialBuyerERC20, initialBuyerETH, operator);
+    await relayedBuyNow(sellerPrivKey, paymentData, initialBuyerERC20, initialBuyerETH, operator);
     const paymentData2 = JSON.parse(JSON.stringify(paymentData));
     paymentData2.paymentId = '0xa884e47bc302c43df83356222374305300b0bcc64bb8d2c300350e06c790ee03';
-    await relayedBuyNow(paymentData2, initialBuyerERC20, initialBuyerETH, operator);
+    await relayedBuyNow(sellerPrivKey, paymentData2, initialBuyerERC20, initialBuyerETH, operator);
     const paymentData3 = JSON.parse(JSON.stringify(paymentData));
     paymentData3.paymentId = '0xe884e47bc302c43df83356222374305300b0bcc64bb8d2c300350e06c790ee03';
     paymentData3.seller = bob;
-    await relayedBuyNow(paymentData3, initialBuyerERC20, initialBuyerETH, operator);
+    await relayedBuyNow(bobPrivKey, paymentData3, initialBuyerERC20, initialBuyerETH, operator);
 
     await finalize(paymentData.paymentId, true, operatorPrivKey);
     await finalize(paymentData2.paymentId, true, operatorPrivKey);
@@ -295,7 +310,7 @@ contract('BuyNowERC20_2', (accounts) => {
   });
 
   it('Withdraw of portion of available funds works', async () => {
-    await relayedBuyNow(paymentData, initialBuyerERC20, initialBuyerETH, operator);
+    await relayedBuyNow(sellerPrivKey, paymentData, initialBuyerERC20, initialBuyerETH, operator);
     await finalize(paymentData.paymentId, true, operatorPrivKey);
 
     const feeAmount = Math.floor(Number(paymentData.amount) * paymentData.feeBPS) / 10000;
@@ -341,7 +356,7 @@ contract('BuyNowERC20_2', (accounts) => {
   });
 
   it('Withdraw of portion of available funds fails if not enough local funds', async () => {
-    await relayedBuyNow(paymentData, initialBuyerERC20, initialBuyerETH, operator);
+    await relayedBuyNow(sellerPrivKey, paymentData, initialBuyerERC20, initialBuyerETH, operator);
     await finalize(paymentData.paymentId, true, operatorPrivKey);
 
     const feeAmount = Math.floor(Number(paymentData.amount) * paymentData.feeBPS) / 10000;
@@ -356,7 +371,7 @@ contract('BuyNowERC20_2', (accounts) => {
   });
 
   it('From PAID: no further action is accepted', async () => {
-    await relayedBuyNow(paymentData, initialBuyerERC20, initialBuyerETH, operator);
+    await relayedBuyNow(sellerPrivKey, paymentData, initialBuyerERC20, initialBuyerETH, operator);
     await finalize(paymentData.paymentId, true, operatorPrivKey);
     // try assetTransferSuccess
     await truffleAssert.reverts(
@@ -372,7 +387,7 @@ contract('BuyNowERC20_2', (accounts) => {
     await erc20.approve(payments.address, paymentData.amount, { from: paymentData.buyer }).should.be.fulfilled;
 
     await truffleAssert.reverts(
-      relayedBuyNow(paymentData, 0, 0, operator),
+      relayedBuyNow(sellerPrivKey, paymentData, 0, 0, operator),
       'payment in incorrect current state',
     );
   });
@@ -407,7 +422,7 @@ contract('BuyNowERC20_2', (accounts) => {
     // After payment has arrived, the amount has been subtracted from the ERC20 contract
     // in favour of the payments contract address. However, the balances in the
     // payments local address remain 0 until the payment moves to PAID or refunds take place.
-    await relayedBuyNow(paymentData, initialBuyerERC20, initialBuyerETH, operator);
+    await relayedBuyNow(sellerPrivKey, paymentData, initialBuyerERC20, initialBuyerETH, operator);
 
     expectedERC20Buyer.iadd(toBN(initialBuyerERC20 - paymentData.amount));
 
@@ -487,7 +502,7 @@ contract('BuyNowERC20_2', (accounts) => {
     // After payment has arrived, the amount has been subtracted from the ERC20 contract
     // in favour of the payments contract address. However, the balances in the
     // payments local address remain 0 until the payment moves to PAID or refunds take place.
-    await relayedBuyNow(paymentData, initialBuyerERC20, initialBuyerETH, operator);
+    await relayedBuyNow(sellerPrivKey, paymentData, initialBuyerERC20, initialBuyerETH, operator);
 
     expectedERC20Buyer.iadd(toBN(initialBuyerERC20 - paymentData.amount));
 
@@ -538,7 +553,7 @@ contract('BuyNowERC20_2', (accounts) => {
   });
 
   it('finalize: only operator is authorized to sign', async () => {
-    await relayedBuyNow(paymentData, initialBuyerERC20, initialBuyerETH, operator);
+    await relayedBuyNow(sellerPrivKey, paymentData, initialBuyerERC20, initialBuyerETH, operator);
     assert.equal(await payments.paymentState(paymentData.paymentId), ASSET_TRANSFERRING);
     await truffleAssert.reverts(
       finalize(paymentData.paymentId, true, buyerPrivKey),
@@ -551,7 +566,7 @@ contract('BuyNowERC20_2', (accounts) => {
   });
 
   it('ASSET_TRANSFERRING moves to PAID when someone relays operator confirmation of asset transfer success', async () => {
-    await relayedBuyNow(paymentData, initialBuyerERC20, initialBuyerETH, operator);
+    await relayedBuyNow(sellerPrivKey, paymentData, initialBuyerERC20, initialBuyerETH, operator);
     assert.equal(await payments.paymentState(paymentData.paymentId), ASSET_TRANSFERRING);
     await finalize(paymentData.paymentId, true, operatorPrivKey);
     assert.equal(await payments.paymentState(paymentData.paymentId), PAID);
@@ -571,7 +586,7 @@ contract('BuyNowERC20_2', (accounts) => {
   });
 
   it('ASSET_TRANSFERRING moves to REFUNDED when someone realays operator confirmation of asset transfer failed', async () => {
-    await relayedBuyNow(paymentData, initialBuyerERC20, initialBuyerETH, operator);
+    await relayedBuyNow(sellerPrivKey, paymentData, initialBuyerERC20, initialBuyerETH, operator);
     assert.equal(await payments.paymentState(paymentData.paymentId), ASSET_TRANSFERRING);
     await finalize(paymentData.paymentId, false, operatorPrivKey);
     assert.equal(await payments.paymentState(paymentData.paymentId), REFUNDED);
@@ -597,7 +612,7 @@ contract('BuyNowERC20_2', (accounts) => {
   });
 
   it('ASSET_TRANSFERRING allows ACCEPTS_REFUND after expiration time', async () => {
-    await relayedBuyNow(paymentData, initialBuyerERC20, initialBuyerETH, operator);
+    await relayedBuyNow(sellerPrivKey, paymentData, initialBuyerERC20, initialBuyerETH, operator);
     assert.equal(await payments.paymentState(paymentData.paymentId), ASSET_TRANSFERRING);
     const paymentWindow = await payments.paymentWindow();
     // wait just before expiration time, and check that state has not changed yet
@@ -611,7 +626,7 @@ contract('BuyNowERC20_2', (accounts) => {
   });
 
   it('ACCEPTS_REFUNDS: buyer can refundAndWithdraw in one transaction', async () => {
-    await relayedBuyNow(paymentData, initialBuyerERC20, initialBuyerETH, operator);
+    await relayedBuyNow(sellerPrivKey, paymentData, initialBuyerERC20, initialBuyerETH, operator);
     assert.equal(await payments.paymentState(paymentData.paymentId), ASSET_TRANSFERRING);
     // wait beyond payment window to move to FAILED
     const paymentWindow = await payments.paymentWindow();
@@ -641,7 +656,7 @@ contract('BuyNowERC20_2', (accounts) => {
   });
 
   it('ACCEPTS_REFUNDS: anyone can refundAndWithdraw in one transaction if allowed', async () => {
-    await relayedBuyNow(paymentData, initialBuyerERC20, initialBuyerETH, operator);
+    await relayedBuyNow(sellerPrivKey, paymentData, initialBuyerERC20, initialBuyerETH, operator);
     assert.equal(await payments.paymentState(paymentData.paymentId), ASSET_TRANSFERRING);
     // wait beyond payment window to move to FAILED
     const paymentWindow = await payments.paymentWindow();
@@ -666,26 +681,26 @@ contract('BuyNowERC20_2', (accounts) => {
   });
 
   it('ASSET_TRANSFERRING blocks another Relayed Payment', async () => {
-    await relayedBuyNow(paymentData, initialBuyerERC20, initialBuyerETH, operator);
+    await relayedBuyNow(sellerPrivKey, paymentData, initialBuyerERC20, initialBuyerETH, operator);
     assert.equal(await payments.paymentState(paymentData.paymentId), ASSET_TRANSFERRING);
 
     await truffleAssert.reverts(
-      relayedBuyNow(paymentData, initialBuyerERC20, initialBuyerETH, operator),
+      relayedBuyNow(sellerPrivKey, paymentData, initialBuyerERC20, initialBuyerETH, operator),
       'payment in incorrect current state',
     );
   });
 
   it('ASSET_TRANSFERRING blocks another Direct Payment', async () => {
-    await relayedBuyNow(paymentData, initialBuyerERC20, initialBuyerETH, operator);
+    await relayedBuyNow(sellerPrivKey, paymentData, initialBuyerERC20, initialBuyerETH, operator);
     assert.equal(await payments.paymentState(paymentData.paymentId), ASSET_TRANSFERRING);
     await truffleAssert.reverts(
-      buyNow(paymentData, initialBuyerERC20, initialBuyerETH),
+      buyNow(sellerPrivKey, paymentData, initialBuyerERC20, initialBuyerETH),
       'payment in incorrect current state',
     );
   });
 
   it('ASSET_TRANSFERRING blocks refund', async () => {
-    await relayedBuyNow(paymentData, initialBuyerERC20, initialBuyerETH, operator);
+    await relayedBuyNow(sellerPrivKey, paymentData, initialBuyerERC20, initialBuyerETH, operator);
     assert.equal(await payments.paymentState(paymentData.paymentId), ASSET_TRANSFERRING);
     await truffleAssert.reverts(
       payments.refund(paymentData.paymentId),
@@ -705,12 +720,14 @@ contract('BuyNowERC20_2', (accounts) => {
     // fails unless registration is not required:
     await payments.setIsSellerRegistrationRequired(true, { from: deployer }).should.be.fulfilled;
     assert.equal(await payments.isRegisteredSeller(paymentData.seller), false);
+
+    const sigSeller = generateSellerSig(sellerPrivKey, paymentData.paymentId);
     await truffleAssert.reverts(
-      payments.relayedBuyNow(paymentData, sigBuyer, sigOperator, { from: operator }),
+      payments.relayedBuyNow(paymentData, sigBuyer, sigOperator, sigSeller, { from: operator }),
       'seller not registered',
     );
     await payments.setIsSellerRegistrationRequired(false, { from: deployer }).should.be.fulfilled;
-    await payments.relayedBuyNow(paymentData, sigBuyer, sigOperator, { from: operator }).should.be.fulfilled;
+    await payments.relayedBuyNow(paymentData, sigBuyer, sigOperator, sigSeller, { from: operator }).should.be.fulfilled;
   });
 
   it('DirectPay: if isSellerRegistrationRequired == false, no need to register', async () => {
@@ -724,12 +741,14 @@ contract('BuyNowERC20_2', (accounts) => {
     // fails unless registration is not required:
     await payments.setIsSellerRegistrationRequired(true, { from: deployer }).should.be.fulfilled;
     assert.equal(await payments.isRegisteredSeller(paymentData.seller), false);
+
+    const sigSeller = generateSellerSig(sellerPrivKey, paymentData.paymentId);
     await truffleAssert.reverts(
-      payments.buyNow(paymentData, signature, { from: paymentData.buyer }),
+      payments.buyNow(paymentData, signature, sigSeller, { from: paymentData.buyer }),
       'seller not registered',
     );
     await payments.setIsSellerRegistrationRequired(false, { from: deployer }).should.be.fulfilled;
-    await payments.buyNow(paymentData, signature, { from: paymentData.buyer }).should.be.fulfilled;
+    await payments.buyNow(paymentData, signature, sigSeller, { from: paymentData.buyer }).should.be.fulfilled;
   });
 
   it('RelayedPay requirements are correctly checked', async () => {
@@ -747,17 +766,18 @@ contract('BuyNowERC20_2', (accounts) => {
 
     const sigBuyer = await signEIP712(buyerPrivKey, prepareDataToSignBuyNow, paymentData, true);
     const sigOperator = await signEIP712(operatorPrivKey, prepareDataToSignBuyNow, paymentData, true);
+    const sigSeller = generateSellerSig(sellerPrivKey, paymentData.paymentId);
 
     // should fail unless seller is registered
     await truffleAssert.reverts(
-      payments.relayedBuyNow(paymentData, sigBuyer, sigOperator, { from: operator }),
+      payments.relayedBuyNow(paymentData, sigBuyer, sigOperator, sigSeller, { from: operator }),
       'seller not registered',
     );
     await payments.registerAsSeller({ from: paymentData.seller }).should.be.fulfilled;
 
     // should fail unless buyer has approved an allowance to the payments contract
     await truffleAssert.reverts(
-      payments.relayedBuyNow(paymentData, sigBuyer, sigOperator, { from: operator }),
+      payments.relayedBuyNow(paymentData, sigBuyer, sigOperator, sigSeller, { from: operator }),
       'insufficient allowance',
     );
 
@@ -766,7 +786,7 @@ contract('BuyNowERC20_2', (accounts) => {
     await erc20.approve(payments.address, Number(paymentData.amount) - 1, { from: buyerAccount.address }).should.be.fulfilled;
 
     await truffleAssert.reverts(
-      payments.relayedBuyNow(paymentData, sigBuyer, sigOperator, { from: operator }),
+      payments.relayedBuyNow(paymentData, sigBuyer, sigOperator, sigSeller, { from: operator }),
       'insufficient allowance',
     );
 
@@ -780,25 +800,26 @@ contract('BuyNowERC20_2', (accounts) => {
     // fails unless fee is below 100%
     const wrongPaymentData2 = JSON.parse(JSON.stringify(paymentData));
     wrongPaymentData2.feeBPS = 10100;
+
     await truffleAssert.reverts(
-      relayedBuyNow(wrongPaymentData2, initialBuyerERC20, initialBuyerETH, operator),
-      'fee cannot be larger than 100 percent',
+      relayedBuyNow(sellerPrivKey, wrongPaymentData2, initialBuyerERC20, initialBuyerETH, operator),
+      'fee cannot be larger than maxFeeBPS',
     );
 
     // fails unless correctly signed by buyer
     await truffleAssert.reverts(
-      payments.relayedBuyNow(paymentData, dummySignature, sigOperator, { from: operator }),
+      payments.relayedBuyNow(paymentData, dummySignature, sigOperator, sigSeller, { from: operator }),
       'incorrect buyer signature',
     );
 
     // fails unless operator is authorized
     await truffleAssert.reverts(
-      payments.relayedBuyNow(paymentData, sigBuyer, dummySignature, { from: buyerAccount.address }),
+      payments.relayedBuyNow(paymentData, sigBuyer, dummySignature, sigSeller, { from: buyerAccount.address }),
       'incorrect operator signature',
     );
 
     // it finally is accepted
-    await payments.relayedBuyNow(paymentData, sigBuyer, sigOperator, { from: operator }).should.be.fulfilled;
+    await payments.relayedBuyNow(paymentData, sigBuyer, sigOperator, sigSeller, { from: operator }).should.be.fulfilled;
   });
 
   it('Direct pay executed by buyer requirements are correctly checked', async () => {
@@ -815,23 +836,24 @@ contract('BuyNowERC20_2', (accounts) => {
     await provideFunds(deployer, buyerAccount.address, initialBuyerETH);
 
     const signature = await signEIP712(operatorPrivKey, prepareDataToSignBuyNow, paymentData, true);
+    const sigSeller = generateSellerSig(sellerPrivKey, paymentData.paymentId);
 
     // should fail unless the buyer is the sender of the TX
     await truffleAssert.reverts(
-      payments.buyNow(paymentData, signature, { from: operator }),
+      payments.buyNow(paymentData, signature, sigSeller, { from: operator }),
       'only buyer can execute this function',
     );
 
     // should fail unless seller is registered
     await truffleAssert.reverts(
-      payments.buyNow(paymentData, signature, { from: paymentData.buyer }),
+      payments.buyNow(paymentData, signature, sigSeller, { from: paymentData.buyer }),
       'seller not registered',
     );
     await payments.registerAsSeller({ from: paymentData.seller }).should.be.fulfilled;
 
     // should fail unless buyer has approved an allowance to the payments contract
     await truffleAssert.reverts(
-      payments.buyNow(paymentData, signature, { from: paymentData.buyer }),
+      payments.buyNow(paymentData, signature, sigSeller, { from: paymentData.buyer }),
       'insufficient allowance',
     );
 
@@ -840,7 +862,7 @@ contract('BuyNowERC20_2', (accounts) => {
     await erc20.approve(payments.address, Number(paymentData.amount) - 1, { from: paymentData.buyer }).should.be.fulfilled;
 
     await truffleAssert.reverts(
-      payments.buyNow(paymentData, signature, { from: paymentData.buyer }),
+      payments.buyNow(paymentData, signature, sigSeller, { from: paymentData.buyer }),
       'insufficient allowance',
     );
 
@@ -854,18 +876,19 @@ contract('BuyNowERC20_2', (accounts) => {
     // fails unless fee is below 100%
     const wrongPaymentData2 = JSON.parse(JSON.stringify(paymentData));
     wrongPaymentData2.feeBPS = 10100;
+
     await truffleAssert.reverts(
-      buyNow(wrongPaymentData2, initialBuyerERC20, initialBuyerETH),
-      'fee cannot be larger than 100 percent',
+      buyNow(sellerPrivKey, wrongPaymentData2, initialBuyerERC20, initialBuyerETH),
+      'fee cannot be larger than maxFeeBPS',
     );
 
     // fails unless the operator signature is provided
     await truffleAssert.reverts(
-      payments.buyNow(paymentData, dummySignature, { from: paymentData.buyer }),
+      payments.buyNow(paymentData, dummySignature, sigSeller, { from: paymentData.buyer }),
       'incorrect operator signature',
     );
 
     // it finally is accepted
-    await payments.buyNow(paymentData, signature, { from: paymentData.buyer }).should.be.fulfilled;
+    await payments.buyNow(paymentData, signature, sigSeller, { from: paymentData.buyer }).should.be.fulfilled;
   });
 });
