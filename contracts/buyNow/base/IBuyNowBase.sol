@@ -62,16 +62,27 @@ interface IBuyNowBase is ISignableStructsBuyNow {
     /**
      * @dev Event emitted on change of EIP712 verifier contract address
      * @param eip712address The address of the new EIP712 verifier contract
+     * @param prevEip712address The previous value of eip712address
      */
 
-    event EIP712(address eip712address);
+    event EIP712(address eip712address, address prevEip712address);
 
     /**
      * @dev Event emitted on change of payment window
      * @param window The new amount of time after the arrival of a payment for which,
      *  in absence of confirmation of asset transfer success, a buyer is allowed to refund
+     * @param prevWindow The previous value of window
      */
-    event PaymentWindow(uint256 window);
+    event PaymentWindow(uint256 window, uint256 prevWindow);
+
+    /**
+     * @dev Event emitted on change of maximum fee BPS that can be accepted in any payment
+     * @param maxFeeBPS the max fee (in BPS units) that can be accepted in any payment
+     *  despite operator and buyer having signed a larger amount;
+     *  a value of 10000 BPS would correspond to 100% (no limit at all)
+     * @param prevMaxFeeBPS The previous value of maxFeeBPS
+     */
+    event MaxFeeBPS(uint256 maxFeeBPS, uint256 prevMaxFeeBPS);
 
     /**
      * @dev Event emitted when a user executes the registerAsSeller method
@@ -87,8 +98,9 @@ interface IBuyNowBase is ISignableStructsBuyNow {
      *    and the hassle of executing the transaction)
      * @param user The address of the user.
      * @param onlyUserCanWithdraw true if only the user can execute withdrawals of his/her local balance
+     * @param prevOnlyUserCanWithdraw the previous value, overwritten by 'onlyUserCanWithdraw'
      */
-    event OnlyUserCanWithdraw(address indexed user, bool onlyUserCanWithdraw);
+    event OnlyUserCanWithdraw(address indexed user, bool onlyUserCanWithdraw, bool prevOnlyUserCanWithdraw);
 
     /**
      * @dev Event emitted when a buyer is refunded for a given payment process
@@ -151,8 +163,8 @@ interface IBuyNowBase is ISignableStructsBuyNow {
         // (subtracting fees) on a successful payment.        
         address seller;
 
-        // The address of the operator of this payment
-        address operator;
+        // the id of the universe that the asset belongs to.
+        uint256 universeId;
 
         // The address of the feesCollector of this payment
         address feesCollector;
@@ -206,7 +218,7 @@ interface IBuyNowBase is ISignableStructsBuyNow {
      *  updates balances of seller or buyer, respectively, and proceeds to withdraw all funds 
      *  in this contract available to the rightful recipient of the paymentId: 
      *  the seller if transferResult.wasSuccessful == true, the buyer otherwise.
-     * @dev If recipient has set onlyUserCanWithdraw == true, then msg.sender must the the recipient;
+     * @dev If recipient has set onlyUserCanWithdraw == true, then msg.sender must the recipient;
      *  otherwise, anyone can execute this method, with funds arriving to the recipient too, but with a
      *  helping 3rd party covering gas costs and TX sending hassle.
      *  The operator signature must be included as input param.
@@ -231,7 +243,7 @@ interface IBuyNowBase is ISignableStructsBuyNow {
 
     /**
      * @notice Executes refund and withdraw to the buyer in one transaction.
-     * @dev If the buyer has set onlyUserCanWithdraw == true, then msg.sender must the the recipient;
+     * @dev If the buyer has set onlyUserCanWithdraw == true, then msg.sender must the recipient;
      *  otherwise, anyone can execute this method, with funds arriving to the buyer too, but with a
      *  helping 3rd party covering gas costs and TX sending hassle.
      *  Requires acceptsRefunds == true to proceed.
@@ -256,7 +268,7 @@ interface IBuyNowBase is ISignableStructsBuyNow {
      *  covers gas costs and the hassle of executing the transaction.
      *  Users can always opt out from this feature, using the setOnlyUserCanWithdraw method.
      */
-    function withdrawTo(address recipient) external;
+    function relayedWithdraw(address recipient) external;
 
     /**
      * @notice Transfers only the specified amount
@@ -332,10 +344,18 @@ interface IBuyNowBase is ISignableStructsBuyNow {
     function paymentWindow() external view returns (uint256);
 
     /**
+     * @notice Returns the max fee (in BPS units) that can be accepted in any payment
+     *  despite operator and buyer having signed a larger amount;
+     *  a value of 10000 BPS would correspond to 100% (no limit at all)
+     * @return the max fee (in BPS units)
+     */
+    function maxFeeBPS() external view returns (uint256);
+
+    /**
      * @notice Returns a descriptor about the currency that this contract accepts
      * @return the string describing the currency
      */
-    function acceptedCurrency() external view returns (string memory);
+    function currencyLongDescriptor() external view returns (string memory);
 
     /**
      * @notice Splits the funds required to provide 'amount' into two sources:

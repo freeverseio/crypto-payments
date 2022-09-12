@@ -4,7 +4,6 @@ pragma solidity =0.8.14;
 import "./IAuctionNative.sol";
 import "./base/AuctionBase.sol";
 import "../buyNow/BuyNowNative.sol";
-import "./base/IEIP712VerifierAuction.sol";
 
 /**
  * @title Escrow Contract for Payments in Auction & BuyNow modes, in Native Cryptocurrencies.
@@ -25,13 +24,14 @@ contract AuctionNative is IAuctionNative, AuctionBase, BuyNowNative {
     {}
 
     /// @inheritdoc IAuctionNative
-    function bid(BidInput calldata bidInput, bytes calldata operatorSignature)
-        external
-        payable
-    {
+    function bid(
+        BidInput calldata bidInput,
+        bytes calldata operatorSignature,
+        bytes calldata sellerSignature
+    ) external payable {
         require(
             msg.sender == bidInput.bidder,
-            "only bidder can execute this function"
+            "AuctionNative::bid: only bidder can execute this function"
         );
         address operator = universeOperator(bidInput.universeId);
         require(
@@ -40,16 +40,16 @@ contract AuctionNative is IAuctionNative, AuctionBase, BuyNowNative {
                 operatorSignature,
                 operator
             ),
-            "incorrect operator signature"
+            "AuctionNative::bid: incorrect operator signature"
         );
         // The following requirement avoids possible mistakes in building the TX's msg.value by a user.
-        // While the funds provided can by less than the bid amount (in case of payer having local balance),
+        // While the funds provided can be less than the bid amount (in case of buyer having local balance),
         // there is no reason for providing more funds than the bid amount.
         require(
             (msg.value <= bidInput.bidAmount),
-            "new funds provided must be less than bid amount"
+            "AuctionNative::bid: new funds provided must be less than bid amount"
         );
-        _processBid(operator, bidInput);
+        _processBid(operator, bidInput, sellerSignature);
     }
 
     /// @inheritdoc IAuctionBase
