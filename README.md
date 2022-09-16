@@ -70,3 +70,21 @@ In all cases, the seller signature is also provided; in the case of auctions, su
 ## UML Diagram
 
 ![UML](./imgs/uml.svg)
+
+## Generating ABI
+
+`solc --version`
+> solc, the solidity compiler commandline interface
+> Version: 0.8.14+commit.80d49f37.Linux.g++
+
+`abigen --version`
+> abigen version 1.10.25-stable-69568c55
+
+From root folder execute:
+
+```
+solc --include-path node_modules/ --base-path . --abi ./contracts/buyNow/BuyNowERC20.sol -o ./out
+abigen --abi=./out/IBuyNowERC20.abi --out=BuyNowERC20.go --pkg=buynowserc20
+```
+
+Notes: Older abigen versions might produce a bad golang file
