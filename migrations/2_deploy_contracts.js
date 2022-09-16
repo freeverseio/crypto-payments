@@ -18,7 +18,7 @@ module.exports = (deployer, network) => {
     console.log('...Coin/Token description: ', deployOptions.currencyDescriptor);
 
     const name = 'LivingAssets Native CryptoPayments';
-    const version = 1;
+    const version = '1';
 
     // Reuse existing EIP712Verifier unless specified in deployOptions:
     let eip712address = deployOptions.reuseEIP712at;
