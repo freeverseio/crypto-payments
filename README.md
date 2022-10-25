@@ -1,5 +1,7 @@
 # Escrow Contracts for Payments in Auction & BuyNow modes
 
+Audited by OpenZeppelin. Available [here](./audit/FreeverseCryptoPaymentsAuditReport.pdf).
+
 ## Install and tests
 ```
 npm ci 
