@@ -17,7 +17,7 @@ module.exports = (deployer, network) => {
     console.log(`Deploying to network: ${network}`);
     console.log('...Coin/Token description: ', deployOptions.currencyDescriptor);
 
-    const name = 'LivingAssets Native CryptoPayments';
+    const name = deployOptions.isERC20 ? 'LivingAssets ERC20 Payments' : 'LivingAssets Native CryptoPayments';
     const version = '1';
 
     // Reuse existing EIP712Verifier unless specified in deployOptions:
